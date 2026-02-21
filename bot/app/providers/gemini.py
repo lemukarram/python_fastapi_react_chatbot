@@ -10,8 +10,12 @@ class GeminiProvider(BaseAIProvider):
         # Use the specific model identifier. 
         # If 'gemini-1.5-flash' still fails, try 'models/gemini-1.5-flash'
         self.model_name = 'gemini-2.5-flash'
-        self.model = genai.GenerativeModel(self.model_name)
-
+        self.model = genai.GenerativeModel(
+            model_name=self.model_name,
+            system_instruction="You are a helpful but very concise AI assistant. "
+                               "Give short, accurate, and to-the-point answers. "
+                               "Avoid long explanations unless specifically asked."
+        )
         # This dictionary will store chat sessions in memory
         # Key: session_id, Value: ChatSession object
         self.sessions = {}
