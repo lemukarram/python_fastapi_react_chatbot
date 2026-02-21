@@ -101,13 +101,13 @@ const styles = {
   },
   sendButton: {
     position: 'absolute',
-    right: '8px',
-    top: '50%',
+    right: '0px',
+    top: '31%',
     transform: 'translateY(-50%)',
     backgroundColor: '#2563eb',
     color: 'white',
     border: 'none',
-    borderRadius: '12px',
+    borderRadius: '14px',
     padding: '10px',
     cursor: 'pointer',
     display: 'flex',
@@ -119,11 +119,18 @@ const styles = {
 
 export default function App() {
   const [messages, setMessages] = useState([
-    { role: 'bot', content: 'Hi there! I am your AI assistant. How can I help you today?' }
+    { role: 'bot', content: 'Hi there! I am your AI assistant. I can remember our conversation now. How can I help you?' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState('');
   const messagesEndRef = useRef(null);
+
+  // Generate a simple session ID when the app loads
+  useEffect(() => {
+    const newSessionId = 'session-' + Math.random().toString(36).substr(2, 9);
+    setSessionId(newSessionId);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -146,7 +153,10 @@ export default function App() {
       const response = await fetch('http://127.0.0.1:8000/api/v1/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ 
+          message: userMessage,
+          session_id: sessionId // We are now sending the session_id
+        }),
       });
 
       const data = await response.json();
@@ -174,8 +184,9 @@ export default function App() {
           </div>
           <h1 style={styles.title}>AI Chat Assistant</h1>
         </div>
-        <div style={{ fontSize: '12px', color: '#9ca3af', backgroundColor: '#f3f4f6', padding: '4px 8px', borderRadius: '4px' }}>
-          v1.0 (Gemini 2.5)
+        <div style={{ fontSize: '10px', color: '#9ca3af', backgroundColor: '#f3f4f6', padding: '4px 8px', borderRadius: '4px', textAlign: 'right' }}>
+          ID: {sessionId}<br/>
+          v1.1 (Memory Enabled)
         </div>
       </header>
 

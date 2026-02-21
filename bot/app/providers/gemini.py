@@ -12,20 +12,25 @@ class GeminiProvider(BaseAIProvider):
         self.model_name = 'gemini-2.5-flash'
         self.model = genai.GenerativeModel(self.model_name)
 
-    async def get_response(self, prompt: str, history: list = None) -> str:
+        # This dictionary will store chat sessions in memory
+        # Key: session_id, Value: ChatSession object
+        self.sessions = {}
+
+    async def get_response(self, prompt: str, session_id: str = "default") -> str:
         try:
-            # Generate content from the model
-            response = self.model.generate_content(prompt)
+            # If the session doesn't exist, start a new chat
+            if session_id not in self.sessions:
+                self.sessions[session_id] = self.model.start_chat(history=[])
+            
+            chat_session = self.sessions[session_id]
+            
+            # send_message automatically updates the history inside the session object
+            response = chat_session.send_message(prompt)
             
             if response and response.text:
                 return response.text
             
-            return "The AI returned an empty response. Please check your prompt."
+            return "I received an empty response. Please try again."
             
         except Exception as e:
-            # If you see 404 here, it usually means the SDK version is old 
-            # or the model name has a regional restriction.
-            error_msg = str(e)
-            if "404" in error_msg:
-                return f"Model Error: {self.model_name} not found. Try running 'pip install --upgrade google-generativeai' in your terminal."
-            return f"Error calling Gemini API: {error_msg}"
+            return f"Error calling Gemini API: {str(e)}"
