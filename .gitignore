@@ -1,0 +1,11 @@
+bot/venv/
+bot/.env
+bot/pycache/
+bot/*.pyc
+bot/.pytest_cache/
+bot-ui/node_modules/
+bot-ui/dist/
+bot-ui/.env
+bot-ui/.DS_StoreIDEs.vscode/
+.idea/
+.env
