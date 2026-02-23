@@ -1,50 +1,52 @@
 from typing import AsyncGenerator
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyUserDatabase
-from sqlalchemy import text, inspect
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from app.core.config import settings
-from app.models.models import User, Base, KnowledgeBase
+from app.models.models import User, Base
 
+# We use the DATABASE_URL from our .env file
 DATABASE_URL = settings.DATABASE_URL
+
+# Create the engine to talk to Postgres
 engine = create_async_engine(DATABASE_URL)
+
+# This creates the session factory
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 async def create_db_and_tables():
     """
-    Ensures pgvector is enabled and creates tables.
-    If pgvector is missing, it skips the vector table so the app doesn't crash.
+    This function activates the pgvector extension and creates your tables.
+    Since the extension is available on your Mac, this will now work.
     """
-    vector_available = False
-    
-    # Step 1: Try to enable the extension
+    # Step 1: Activate pgvector in its own transaction
     try:
         async with engine.begin() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        print("Successfully enabled pgvector extension.")
-        vector_available = True
+            print("Success: pgvector extension is now active in your database.")
     except Exception as e:
-        print("Warning: pgvector extension not found on this system. RAG features will be disabled.")
+        print(f"Extension Warning: {e}")
 
-    # Step 2: Create tables
-    async with engine.begin() as conn:
-        if vector_available:
-            # Create everything if vector is ready
+    # Step 2: Create all tables (User, ChatMessage, KnowledgeBase)
+    # Now that vector is active, the KnowledgeBase table won't crash.
+    try:
+        async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            print("All database tables (including RAG) created successfully.")
-        else:
-            # If no vector, we avoid creating the KnowledgeBase table to prevent a crash
-            def create_tables_selective(target_base, connection):
-                for table in target_base.metadata.sorted_tables:
-                    if table.name != "knowledge_base":
-                        table.create(connection, checkfirst=True)
-            
-            await conn.run_sync(lambda sync_conn: create_tables_selective(Base, sync_conn))
-            print("Standard tables created. KnowledgeBase skipped due to missing pgvector.")
+            print("Success: All database tables created correctly.")
+    except Exception as e:
+        print(f"Table Creation Error: {e}")
+        print("Tip: If it still says 'type vector does not exist', try restarting your terminal.")
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Helper to get a database session for your API routes.
+    """
     async with async_session_maker() as session:
         yield session
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+    """
+    Connects FastAPI Users to your Postgres database.
+    """
     yield SQLAlchemyUserDatabase(session, User)

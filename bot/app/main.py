@@ -1,66 +1,77 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.db import create_db_and_tables
-from app.core.auth import fastapi_users, auth_backend
-from app.api.v1 import chat
+from sqlalchemy import text
+from app.core.db import create_db_and_tables, get_async_session, engine
+from app.core.auth import fastapi_users, auth_backend, current_active_user
 from app.schemas.user import UserRead, UserCreate
+from app.schemas.chat import ChatRequest, ChatResponse
+from app.services.chat_service import ChatService
 
-# Create the FastAPI instance
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # This runs when the app starts.
+    try:
+        print("--- System Check: Tech with muk AI Bot ---")
+        
+        # Verify exactly which Postgres version we are talking to
+        async with engine.connect() as conn:
+            version_result = await conn.execute(text("SELECT version();"))
+            pg_version = version_result.scalar()
+            print(f"Connected to: {pg_version}")
+        
+        print("Checking database tables and extensions...")
+        await create_db_and_tables()
+        print("System is ready for users.")
+    except Exception as e:
+        print(f"Startup Failure: {e}")
+    yield
+    print("Shutting down...")
+
 app = FastAPI(
-    title="AI Chatbot Pro",
-    description="A professional Gemini-powered chatbot with RAG and secure Auth.",
-    version="1.0.0"
+    title="AI Chatbot Pro", 
+    description="Secure Gemini Chatbot for Riyadh Dev Community",
+    lifespan=lifespan
 )
 
-# Setup CORS so your React frontend can talk to this backend
-# For local development, we allow all. In production, you'd specify your domain.
+# CORS settings for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 1. Add Authentication Routes (Login)
-# This creates the /auth/jwt/login and /auth/jwt/logout endpoints
+# Authentication Routers (JWT & Registration)
 app.include_router(
-    fastapi_users.get_auth_router(auth_backend),
-    prefix="/auth/jwt",
-    tags=["auth"],
+    fastapi_users.get_auth_router(auth_backend), 
+    prefix="/auth/jwt", 
+    tags=["auth"]
+)
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate), 
+    prefix="/auth", 
+    tags=["auth"]
 )
 
-# 2. Add Registration Routes
-# This creates the /auth/register endpoint
-app.include_router(
-    fastapi_users.get_register_router(UserRead, UserCreate),
-    prefix="/auth",
-    tags=["auth"],
-)
-
-# 3. Add the Chat Logic Routes
-# This includes the /api/v1/message endpoint we built
-app.include_router(
-    chat.router,
-    prefix="/api/v1",
-    tags=["chat"]
-)
-
-@app.on_event("startup")
-async def on_startup():
+@app.post("/api/v1/message", response_model=ChatResponse)
+async def chat_endpoint(
+    request: ChatRequest,
+    db = Depends(get_async_session),
+    user = Depends(current_active_user)
+):
     """
-    This function runs the moment the server starts.
-    It creates the Postgres tables and enables pgvector automatically.
+    Private chat endpoint. Only accessible with a valid JWT token.
     """
-    await create_db_and_tables()
+    service = ChatService(db)
+    reply = await service.chat(user.id, request.message)
+    return ChatResponse(reply=reply)
 
 @app.get("/")
 async def root():
-    """
-    A simple health check to see if the API is online.
-    """
     return {
-        "message": "AI Chatbot API is online and secure.",
-        "location": "Riyadh, KSA",
-        "developer": "Mukarram Hussain (Tech with muk)"
+        "status": "online", 
+        "message": "Backend is reachable.",
+        "location": "Riyadh, KSA"
     }

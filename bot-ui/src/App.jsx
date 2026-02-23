@@ -1,282 +1,208 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Loader2 } from 'lucide-react';
 
-// Standard JS object for styles to avoid framework dependencies
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    backgroundColor: '#f9fafb',
-    color: '#111827',
-    fontFamily: 'system-ui, -apple-system, sans-serif'
-  },
-  header: {
-    backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e5e7eb',
-    padding: '16px 24px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-    flexShrink: 0
-  },
-  logoSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px'
-  },
-  iconContainer: {
-    backgroundColor: '#2563eb',
-    padding: '8px',
-    borderRadius: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  title: {
-    fontWeight: '700',
-    fontSize: '20px',
-    margin: 0,
-    color: '#1f2937'
-  },
-  main: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '24px'
-  },
-  chatContainer: {
-    maxWidth: '768px',
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px'
-  },
-  messageRow: {
-    display: 'flex',
-    gap: '16px'
-  },
-  messageRowUser: {
-    flexDirection: 'row-reverse'
-  },
-  avatar: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-  },
-  bubble: {
-    maxWidth: '85%',
-    padding: '12px 16px',
-    borderRadius: '16px',
-    fontSize: '15px',
-    lineHeight: '1.5',
-    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-    whiteSpace: 'pre-wrap'
-  },
-  footer: {
-    backgroundColor: '#ffffff',
-    borderTop: '1px solid #e5e7eb',
-    padding: '24px',
-    flexShrink: 0
-  },
-  inputWrapper: {
-    maxWidth: '768px',
-    margin: '0 auto',
-    position: 'relative'
-  },
-  input: {
-    width: '100%',
-    backgroundColor: '#f3f4f6',
-    border: 'none',
-    borderRadius: '16px',
-    padding: '16px 60px 16px 16px',
-    fontSize: '16px',
-    outline: 'none',
-    boxSizing: 'border-box'
-  },
-  sendButton: {
-    position: 'absolute',
-    right: '0px',
-    top: '31%',
-    transform: 'translateY(-50%)',
-    backgroundColor: '#2563eb',
-    color: 'white',
-    border: 'none',
-    borderRadius: '14px',
-    padding: '10px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'background-color 0.2s'
-  }
-};
+const API_BASE = "http://127.0.0.1:8000";
 
 export default function App() {
-  const [messages, setMessages] = useState([
-    { role: 'bot', content: 'Hi there! I am your AI assistant. I can remember our conversation now. How can I help you?' }
-  ]);
+  // State management
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [userEmail, setUserEmail] = useState(localStorage.getItem('userEmail') || '');
+  const [view, setView] = useState(token ? 'chat' : 'login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState('');
-  const messagesEndRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Generate a simple session ID when the app loads
+  const chatEndRef = useRef(null);
+
+  // Auto-scroll to bottom of chat
   useEffect(() => {
-    const newSessionId = 'session-' + Math.random().toString(36).substr(2, 9);
-    setSessionId(newSessionId);
-  }, []);
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
-
-  const handleSendMessage = async (e) => {
+  // Auth: Register
+  const handleRegister = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setIsLoading(true);
-
+    setError('');
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/message', {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: userMessage,
-          session_id: sessionId // We are now sending the session_id
-        }),
+        body: JSON.stringify({ email, password })
       });
-
-      const data = await response.json();
-      setMessages(prev => [...prev, { 
-        role: 'bot', 
-        content: data.reply || "I am sorry, I encountered an issue." 
-      }]);
-    } catch (error) {
-      setMessages(prev => [...prev, { 
-        role: 'bot', 
-        content: "Error: Connection to the backend failed. Please check if the FastAPI server is running." 
-      }]);
-    } finally {
-      setIsLoading(false);
+      if (res.ok) {
+        alert("Registration successful. Please login.");
+        setView('login');
+      } else {
+        const data = await res.json();
+        setError(data.detail || "Registration failed.");
+      }
+    } catch (err) {
+      setError("Server connection failed.");
     }
+  };
+
+  // Auth: Login (FastAPI Users uses Form Data for OAuth2)
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/jwt/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToken(data.access_token);
+        setUserEmail(email);
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('userEmail', email);
+        setView('chat');
+      } else {
+        setError(data.detail || "Invalid email or password.");
+      }
+    } catch (err) {
+      setError("Connection error.");
+    }
+  };
+
+  // Auth: Logout
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/auth/jwt/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (e) {}
+    setToken('');
+    setUserEmail('');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userEmail');
+    setView('login');
+    setMessages([]);
+  };
+
+  // Chat: Send Message
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    const userMsg = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ message: input })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessages(prev => [...prev, { role: 'bot', content: data.reply }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'bot', content: "Sorry, I am having trouble connecting." }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'bot', content: "Connection to server lost." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Styles
+  const styles = {
+    container: { fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ddd', borderRadius: '12px', backgroundColor: '#f9f9f9' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+    inputGroup: { marginBottom: '15px' },
+    label: { display: 'block', marginBottom: '5px', fontWeight: 'bold' },
+    input: { width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '6px', border: '1px solid #ccc' },
+    button: { width: '100%', padding: '12px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+    chatBox: { height: '400px', overflowY: 'auto', border: '1px solid #ddd', padding: '15px', borderRadius: '8px', backgroundColor: 'white', marginBottom: '15px' },
+    msgUser: { textAlign: 'right', margin: '10px 0' },
+    msgBot: { textAlign: 'left', margin: '10px 0' },
+    bubbleUser: { backgroundColor: '#007bff', color: 'white', padding: '8px 12px', borderRadius: '15px 15px 0 15px', display: 'inline-block' },
+    bubbleBot: { backgroundColor: '#e9ecef', color: '#333', padding: '8px 12px', borderRadius: '15px 15px 15px 0', display: 'inline-block' },
+    error: { color: 'red', marginBottom: '10px', fontSize: '14px' },
+    link: { color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }
   };
 
   return (
     <div style={styles.container}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.logoSection}>
-          <div style={styles.iconContainer}>
-            <Bot size={24} color="white" />
+      <div style={styles.header}>
+        <h2>{view === 'chat' ? 'AI Assistant' : 'Welcome'}</h2>
+        {token && <button onClick={handleLogout} style={{ ...styles.button, width: 'auto', padding: '5px 10px', backgroundColor: '#dc3545' }}>Logout</button>}
+      </div>
+
+      {view === 'login' && (
+        <form onSubmit={handleLogin}>
+          <h3>Login</h3>
+          {error && <div style={styles.error}>{error}</div>}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Email</label>
+            <input type="email" style={styles.input} value={email} onChange={e => setEmail(e.target.value)} required />
           </div>
-          <h1 style={styles.title}>AI Chat Assistant</h1>
-        </div>
-        <div style={{ fontSize: '10px', color: '#9ca3af', backgroundColor: '#f3f4f6', padding: '4px 8px', borderRadius: '4px', textAlign: 'right' }}>
-          ID: {sessionId}<br/>
-          v1.1 (Memory Enabled)
-        </div>
-      </header>
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Password</label>
+            <input type="password" style={styles.input} value={password} onChange={e => setPassword(e.target.value)} required />
+          </div>
+          <button type="submit" style={styles.button}>Login</button>
+          <p>New here? <span style={styles.link} onClick={() => setView('register')}>Register now</span></p>
+        </form>
+      )}
 
-      {/* Chat Area */}
-      <main style={styles.main}>
-        <div style={styles.chatContainer}>
-          {messages.map((msg, index) => (
-            <div 
-              key={index} 
-              style={{
-                ...styles.messageRow,
-                ...(msg.role === 'user' ? styles.messageRowUser : {})
-              }}
-            >
-              <div style={{
-                ...styles.avatar,
-                backgroundColor: msg.role === 'user' ? '#2563eb' : '#ffffff',
-                color: msg.role === 'user' ? 'white' : '#2563eb',
-                border: msg.role === 'user' ? 'none' : '1px solid #e5e7eb'
-              }}>
-                {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
-              </div>
-              
-              <div style={{
-                ...styles.bubble,
-                backgroundColor: msg.role === 'user' ? '#2563eb' : '#ffffff',
-                color: msg.role === 'user' ? 'white' : '#1f2937',
-                border: msg.role === 'user' ? 'none' : '1px solid #f3f4f6',
-                borderTopLeftRadius: msg.role === 'bot' ? '0' : '16px',
-                borderTopRightRadius: msg.role === 'user' ? '0' : '16px',
-              }}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-          
-          {isLoading && (
-            <div style={styles.messageRow}>
-              <div style={{...styles.avatar, backgroundColor: 'white', border: '1px solid #e5e7eb', color: '#2563eb'}}>
-                <Bot size={20} />
-              </div>
-              <div style={{...styles.bubble, backgroundColor: 'white', border: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                <Loader2 size={18} className="animate-spin" style={{ color: '#2563eb' }} />
-                <span style={{ color: '#9ca3af', fontSize: '14px' }}>Thinking...</span>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </main>
+      {view === 'register' && (
+        <form onSubmit={handleRegister}>
+          <h3>Create Account</h3>
+          {error && <div style={styles.error}>{error}</div>}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Email</label>
+            <input type="email" style={styles.input} value={email} onChange={e => setEmail(e.target.value)} required />
+          </div>
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Password</label>
+            <input type="password" style={styles.input} value={password} onChange={e => setPassword(e.target.value)} required />
+          </div>
+          <button type="submit" style={styles.button}>Register</button>
+          <p>Already have an account? <span style={styles.link} onClick={() => setView('login')}>Login</span></p>
+        </form>
+      )}
 
-      {/* Input Area */}
-      <footer style={styles.footer}>
-        <div style={styles.inputWrapper}>
-          <form onSubmit={handleSendMessage}>
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
-              style={styles.input}
-              disabled={isLoading}
+      {view === 'chat' && (
+        <div>
+          <p style={{ fontSize: '12px', color: '#666' }}>Logged in as: {userEmail}</p>
+          <div style={styles.chatBox}>
+            {messages.map((m, i) => (
+              <div key={i} style={m.role === 'user' ? styles.msgUser : styles.msgBot}>
+                <div style={m.role === 'user' ? styles.bubbleUser : styles.bubbleBot}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {loading && <div style={styles.msgBot}><div style={styles.bubbleBot}>Typing...</div></div>}
+            <div ref={chatEndRef} />
+          </div>
+          <form onSubmit={sendMessage} style={{ display: 'flex', gap: '10px' }}>
+            <input 
+              style={styles.input} 
+              placeholder="Ask anything..." 
+              value={input} 
+              onChange={e => setInput(e.target.value)} 
             />
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              style={{
-                ...styles.sendButton,
-                backgroundColor: (!input.trim() || isLoading) ? '#d1d5db' : '#2563eb'
-              }}
-            >
-              <Send size={20} />
-            </button>
+            <button type="submit" style={{ ...styles.button, width: '80px' }}>Send</button>
           </form>
-          <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>
-            Powered by Gemini 2.5 . Developed by Mukarram
-          </div>
         </div>
-      </footer>
-      
-      {/* Animation Styles */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-      `}</style>
+      )}
     </div>
   );
 }
