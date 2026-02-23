@@ -42,7 +42,9 @@ class ChatService:
         enhanced_prompt = f"Context from Knowledge Base:\n{context}\n\nUser Question: {message}"
         
         # 4. Get the response from Gemini
-        reply = await self.ai.get_response(enhanced_prompt, history=history)
+        raw_reply = await self.ai.get_response(enhanced_prompt, history=history)
+        # remove the * from the response.
+        reply = raw_reply.replace("*", "")
 
         # 5. Save the new exchange to the database history
         # We save both what the user said and what the bot replied
