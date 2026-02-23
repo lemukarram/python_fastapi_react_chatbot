@@ -1,40 +1,41 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.providers.base import BaseAIProvider
 from app.core.config import settings
 
 class GeminiProvider(BaseAIProvider):
     def __init__(self):
-        # Configure the SDK
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        # Use the specific model identifier. 
-        # If 'gemini-1.5-flash' still fails, try 'models/gemini-1.5-flash'
-        self.model_name = 'gemini-2.5-flash'
-        self.model = genai.GenerativeModel(
-            model_name=self.model_name,
-            system_instruction="You are a helpful but very concise AI assistant. "
-                               "Give short, accurate, and to-the-point answers. "
-                               "Avoid long explanations unless specifically asked."
+        # Using the new SDK client
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self.model_id = "gemini-2.0-flash"
+        self.system_instruction = (
+            "You are a helpful and very concise AI assistant. "
+            "Always give short, accurate, and direct answers. "
+            "Do not use long explanations unless asked."
         )
-        # This dictionary will store chat sessions in memory
-        # Key: session_id, Value: ChatSession object
-        self.sessions = {}
 
-    async def get_response(self, prompt: str, session_id: str = "default") -> str:
+    async def get_response(self, prompt: str, history: list = None) -> str:
         try:
-            # If the session doesn't exist, start a new chat
-            if session_id not in self.sessions:
-                self.sessions[session_id] = self.model.start_chat(history=[])
-            
-            chat_session = self.sessions[session_id]
-            
-            # send_message automatically updates the history inside the session object
-            response = chat_session.send_message(prompt)
-            
-            if response and response.text:
-                return response.text
-            
-            return "I received an empty response. Please try again."
-            
+            # We convert the history to the new SDK format
+            formatted_history = []
+            if history:
+                for entry in history:
+                    role = "user" if entry["role"] == "user" else "model"
+                    formatted_history.append(
+                        types.Content(role=role, parts=[types.Part(text=entry["content"])])
+                    )
+
+            # Creating the chat session
+            chat = self.client.chats.create(
+                model=self.model_id,
+                config=types.GenerateContentConfig(
+                    system_instruction=self.system_instruction,
+                    history=formatted_history
+                )
+            )
+
+            response = chat.send_message(prompt)
+            return response.text
+
         except Exception as e:
-            return f"Error calling Gemini API: {str(e)}"
+            return f"Gemini Error: {str(e)}"

@@ -1,5 +1,10 @@
 fastapi[standard]
 uvicorn
 python-dotenv
-google-generativeai
+google-genai
 pydantic
+pydantic-settings
+fastapi-users[sqlalchemy]
+asyncpg
+pgvector
+sqlalchemy[ext]

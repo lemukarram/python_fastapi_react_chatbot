@@ -3,16 +3,20 @@ from typing import Optional, List
 
 class ChatRequest(BaseModel):
     """
-    Schema for incoming chat messages.
+    Schema for messages sent from your React app.
     """
-    message: str = Field(..., example="How is the weather in Riyadh?")
-    # You can add more fields here later, like session_id or user_id
+    message: str = Field(..., example="What is the weather like in Riyadh?")
+    
+    # Even though we use User ID from the token, we keep session_id 
+    # here in case you want to handle specific chat threads later.
     session_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     """
-    Schema for the chatbot's response.
+    Schema for the response sent back to the user.
     """
     reply: str
-    # In the future, you can add sources here for RAG
-    sources: Optional[List[str]] = None
+    
+    # This list will store text snippets found during the RAG search.
+    # It shows the user that the AI is using your custom data.
+    sources: Optional[List[str]] = Field(default_factory=list)
