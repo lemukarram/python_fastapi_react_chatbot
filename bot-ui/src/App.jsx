@@ -12,6 +12,7 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const chatEndRef = useRef(null);
 
@@ -32,7 +33,7 @@ export default function App() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.ok ? await res.json() : [];
+        const data = await res.json();
         setMessages(data);
       }
     } catch (err) {
@@ -40,9 +41,33 @@ export default function App() {
     }
   };
 
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (res.ok) {
+        setSuccess("Registration successful. You can now login.");
+        setView('login');
+        setPassword(''); // Clear password for security
+      } else {
+        const data = await res.json();
+        setError(data.detail || "Registration failed. Please try again.");
+      }
+    } catch (err) {
+      setError("Cannot connect to server.");
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     const formData = new URLSearchParams();
     formData.append('username', email);
     formData.append('password', password);
@@ -109,31 +134,46 @@ export default function App() {
   const styles = {
     container: { fontFamily: 'sans-serif', maxWidth: '600px', margin: '20px auto', padding: '20px', backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px' },
     chatBox: { height: '400px', overflowY: 'auto', marginBottom: '15px', padding: '10px', backgroundColor: '#fdfdfd', border: '1px solid #f0f0f0', borderRadius: '8px' },
-    msg: { margin: '8px 0', padding: '8px 12px', borderRadius: '8px', display: 'inline-block', maxWidth: '80%' },
-    user: { backgroundColor: '#007bff', color: '#ffffff', float: 'right', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px 8px 5px' },
-    bot: { backgroundColor: '#f1f1f1', color: '#333', float: 'left', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px 8px 5px'  },
-    input: { width: '80%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc' },
-    btn: { padding: '10px 20px', borderRadius: '6px', backgroundColor: '#007bff', color: 'white', border: 'none', cursor: 'pointer' }
+    user: { backgroundColor: '#007bff', color: '#ffffff', float: 'right', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px' },
+    bot: { backgroundColor: '#f1f1f1', color: '#333', float: 'left', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px' },
+    input: { width: '80%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' },
+    btn: { padding: '10px 20px', borderRadius: '6px', backgroundColor: '#007bff', color: 'white', border: 'none', cursor: 'pointer' },
+    toggleLink: { color: '#007bff', cursor: 'pointer', textDecoration: 'underline', marginTop: '15px', display: 'block', fontSize: '14px' }
   };
 
   return (
     <div style={styles.container}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Tender Assistant</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <h2 style={{ margin: 0 }}>RSG Tender BOT</h2>
         {token && <button onClick={handleLogout} style={{ ...styles.btn, backgroundColor: '#dc3545' }}>Logout</button>}
       </div>
 
-      {view === 'login' ? (
+      {success && <p style={{ color: 'green', backgroundColor: '#eaffea', padding: '10px', borderRadius: '6px' }}>{success}</p>}
+      {error && <p style={{ color: 'red', backgroundColor: '#ffeaea', padding: '10px', borderRadius: '6px' }}>{error}</p>}
+
+      {view === 'login' && (
         <form onSubmit={handleLogin}>
           <h3>Login</h3>
-          {error && <p style={{ color: 'red' }}>{error}</p>}
           <input type="email" placeholder="Email" style={{ ...styles.input, width: '100%', marginBottom: '10px' }} value={email} onChange={e => setEmail(e.target.value)} required />
           <input type="password" placeholder="Password" style={{ ...styles.input, width: '100%', marginBottom: '10px' }} value={password} onChange={e => setPassword(e.target.value)} required />
           <button type="submit" style={{ ...styles.btn, width: '100%' }}>Login</button>
+          <span style={styles.toggleLink} onClick={() => { setView('register'); setError(''); }}>Don't have an account? Register here.</span>
         </form>
-      ) : (
+      )}
+
+      {view === 'register' && (
+        <form onSubmit={handleRegister}>
+          <h3>Create Account</h3>
+          <input type="email" placeholder="Email" style={{ ...styles.input, width: '100%', marginBottom: '10px' }} value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password" style={{ ...styles.input, width: '100%', marginBottom: '10px' }} value={password} onChange={e => setPassword(e.target.value)} required />
+          <button type="submit" style={{ ...styles.btn, width: '100%', backgroundColor: '#28a745' }}>Register</button>
+          <span style={styles.toggleLink} onClick={() => { setView('login'); setError(''); }}>Already have an account? Login here.</span>
+        </form>
+      )}
+
+      {view === 'chat' && (
         <div>
-          <p style={{ fontSize: '12px' }}>Email: {userEmail}</p>
+          <p style={{ fontSize: '12px', color: '#666' }}>Logged in as: {userEmail}</p>
           <div style={styles.chatBox}>
             {messages.map((m, i) => (
               <div key={i} style={m.role === 'user' ? styles.user : styles.bot}>
@@ -144,7 +184,7 @@ export default function App() {
             <div ref={chatEndRef} />
           </div>
           <form onSubmit={sendMessage} style={{ display: 'flex', gap: '5px' }}>
-            <input style={styles.input} value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message..." />
+            <input style={{ ...styles.input, flexGrow: 1 }} value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message..." />
             <button type="submit" style={styles.btn}>Send</button>
           </form>
         </div>
