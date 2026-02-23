@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 const API_BASE = "http://127.0.0.1:8000";
 
 export default function App() {
-  // State management
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [userEmail, setUserEmail] = useState(localStorage.getItem('userEmail') || '');
   const [view, setView] = useState(token ? 'chat' : 'login');
@@ -16,34 +15,31 @@ export default function App() {
 
   const chatEndRef = useRef(null);
 
-  // Auto-scroll to bottom of chat
+  // Load history when entering chat view
+  useEffect(() => {
+    if (token && view === 'chat') {
+      fetchHistory();
+    }
+  }, [token, view]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auth: Register
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError('');
+  const fetchHistory = async () => {
     try {
-      const res = await fetch(`${API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+      const res = await fetch(`${API_BASE}/api/v1/history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        alert("Registration successful. Please login.");
-        setView('login');
-      } else {
-        const data = await res.json();
-        setError(data.detail || "Registration failed.");
+        const data = await res.ok ? await res.json() : [];
+        setMessages(data);
       }
     } catch (err) {
-      setError("Server connection failed.");
+      console.error("Failed to load history.");
     }
   };
 
-  // Auth: Login (FastAPI Users uses Form Data for OAuth2)
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -65,30 +61,22 @@ export default function App() {
         localStorage.setItem('userEmail', email);
         setView('chat');
       } else {
-        setError(data.detail || "Invalid email or password.");
+        setError("Invalid email or password.");
       }
     } catch (err) {
       setError("Connection error.");
     }
   };
 
-  // Auth: Logout
-  const handleLogout = async () => {
-    try {
-      await fetch(`${API_BASE}/auth/jwt/logout`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-    } catch (e) {}
-    setToken('');
-    setUserEmail('');
+  const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userEmail');
-    setView('login');
+    setToken('');
+    setUserEmail('');
     setMessages([]);
+    setView('login');
   };
 
-  // Chat: Send Message
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -110,96 +98,54 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setMessages(prev => [...prev, { role: 'bot', content: data.reply }]);
-      } else {
-        setMessages(prev => [...prev, { role: 'bot', content: "Sorry, I am having trouble connecting." }]);
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'bot', content: "Connection to server lost." }]);
+      setMessages(prev => [...prev, { role: 'bot', content: "Error connecting to server." }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Styles
   const styles = {
-    container: { fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '40px auto', padding: '20px', border: '1px solid #ddd', borderRadius: '12px', backgroundColor: '#f9f9f9' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    inputGroup: { marginBottom: '15px' },
-    label: { display: 'block', marginBottom: '5px', fontWeight: 'bold' },
-    input: { width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '6px', border: '1px solid #ccc' },
-    button: { width: '100%', padding: '12px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
-    chatBox: { height: '400px', overflowY: 'auto', border: '1px solid #ddd', padding: '15px', borderRadius: '8px', backgroundColor: 'white', marginBottom: '15px' },
-    msgUser: { textAlign: 'right', margin: '10px 0' },
-    msgBot: { textAlign: 'left', margin: '10px 0' },
-    bubbleUser: { backgroundColor: '#007bff', color: 'white', padding: '8px 12px', borderRadius: '15px 15px 0 15px', display: 'inline-block' },
-    bubbleBot: { backgroundColor: '#e9ecef', color: '#333', padding: '8px 12px', borderRadius: '15px 15px 15px 0', display: 'inline-block' },
-    error: { color: 'red', marginBottom: '10px', fontSize: '14px' },
-    link: { color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }
+    container: { fontFamily: 'sans-serif', maxWidth: '600px', margin: '20px auto', padding: '20px', backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px' },
+    chatBox: { height: '400px', overflowY: 'auto', marginBottom: '15px', padding: '10px', backgroundColor: '#fdfdfd', border: '1px solid #f0f0f0', borderRadius: '8px' },
+    msg: { margin: '8px 0', padding: '8px 12px', borderRadius: '8px', display: 'inline-block', maxWidth: '80%' },
+    user: { backgroundColor: '#007bff', color: '#ffffff', float: 'right', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px 8px 5px' },
+    bot: { backgroundColor: '#f1f1f1', color: '#333', float: 'left', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px 8px 5px'  },
+    input: { width: '80%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc' },
+    btn: { padding: '10px 20px', borderRadius: '6px', backgroundColor: '#007bff', color: 'white', border: 'none', cursor: 'pointer' }
   };
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <h2>{view === 'chat' ? 'AI Assistant' : 'Welcome'}</h2>
-        {token && <button onClick={handleLogout} style={{ ...styles.button, width: 'auto', padding: '5px 10px', backgroundColor: '#dc3545' }}>Logout</button>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Tender Assistant</h2>
+        {token && <button onClick={handleLogout} style={{ ...styles.btn, backgroundColor: '#dc3545' }}>Logout</button>}
       </div>
 
-      {view === 'login' && (
+      {view === 'login' ? (
         <form onSubmit={handleLogin}>
           <h3>Login</h3>
-          {error && <div style={styles.error}>{error}</div>}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Email</label>
-            <input type="email" style={styles.input} value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Password</label>
-            <input type="password" style={styles.input} value={password} onChange={e => setPassword(e.target.value)} required />
-          </div>
-          <button type="submit" style={styles.button}>Login</button>
-          <p>New here? <span style={styles.link} onClick={() => setView('register')}>Register now</span></p>
+          {error && <p style={{ color: 'red' }}>{error}</p>}
+          <input type="email" placeholder="Email" style={{ ...styles.input, width: '100%', marginBottom: '10px' }} value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password" style={{ ...styles.input, width: '100%', marginBottom: '10px' }} value={password} onChange={e => setPassword(e.target.value)} required />
+          <button type="submit" style={{ ...styles.btn, width: '100%' }}>Login</button>
         </form>
-      )}
-
-      {view === 'register' && (
-        <form onSubmit={handleRegister}>
-          <h3>Create Account</h3>
-          {error && <div style={styles.error}>{error}</div>}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Email</label>
-            <input type="email" style={styles.input} value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Password</label>
-            <input type="password" style={styles.input} value={password} onChange={e => setPassword(e.target.value)} required />
-          </div>
-          <button type="submit" style={styles.button}>Register</button>
-          <p>Already have an account? <span style={styles.link} onClick={() => setView('login')}>Login</span></p>
-        </form>
-      )}
-
-      {view === 'chat' && (
+      ) : (
         <div>
-          <p style={{ fontSize: '12px', color: '#666' }}>Logged in as: {userEmail}</p>
+          <p style={{ fontSize: '12px' }}>Email: {userEmail}</p>
           <div style={styles.chatBox}>
             {messages.map((m, i) => (
-              <div key={i} style={m.role === 'user' ? styles.msgUser : styles.msgBot}>
-                <div style={m.role === 'user' ? styles.bubbleUser : styles.bubbleBot}>
-                  {m.content}
-                </div>
+              <div key={i} style={m.role === 'user' ? styles.user : styles.bot}>
+                <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
               </div>
             ))}
-            {loading && <div style={styles.msgBot}><div style={styles.bubbleBot}>Typing...</div></div>}
+            {loading && <div style={styles.bot}>Typing...</div>}
             <div ref={chatEndRef} />
           </div>
-          <form onSubmit={sendMessage} style={{ display: 'flex', gap: '10px' }}>
-            <input 
-              style={styles.input} 
-              placeholder="Ask anything..." 
-              value={input} 
-              onChange={e => setInput(e.target.value)} 
-            />
-            <button type="submit" style={{ ...styles.button, width: '80px' }}>Send</button>
+          <form onSubmit={sendMessage} style={{ display: 'flex', gap: '5px' }}>
+            <input style={styles.input} value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message..." />
+            <button type="submit" style={styles.btn}>Send</button>
           </form>
         </div>
       )}

@@ -1,88 +1,72 @@
 
-# Simple AI Chatbot (Gemini 2.5 + FastAPI + React)
+# RSG Tender Chat BOT
 
-This is a clean and modular AI chatbot project. It uses a FastAPI backend in Python and a React frontend. The architecture is designed so you can easily switch AI models or add more advanced features like RAG later.
+An advanced AI-powered assistant designed specifically for the Saudi Arabian tendering and contracting market. This tool helps users navigate the Etimad platform and understand the Government Tendering and Procurement Law using Gemini 2.5 Flash and Retrieval-Augmented Generation (RAG).
 
-## Project Structure
+## Project Overview
 
-```text
-rsg/ (Main Git Root)
-├── bot/                # FastAPI Backend (Python)
-│   ├── app/            # Application logic
-│   ├── .env            # Private API Keys
-│   └── requirements.txt
-└── bot-ui/             # React Frontend (Vite)
-    ├── src/            # Chat interface code
-    └── package.json
-```
+The RSG Tender Chat BOT is a full-stack application. It uses a FastAPI backend and a React frontend. It stores tender-related documents in a PostgreSQL database using the pgvector extension. This allows the bot to provide accurate advice based on your specific documents.
 
-## Main Features
+## System Requirements
 
-* **FastAPI Backend.** High performance and easy to scale.
-* **Modular Design.** Logic is separated from the AI provider.
-* **Gemini 2.5.** Uses the latest gemini-1.5-flash model.
-* **React UI.** A modern and responsive interface.
-* **CORS Configured.** Ready for local development out of the box.
+Before you start, make sure your computer has these tools installed.
 
-## Setup Instructions
+. Python 3.10 or higher.
+. Node.js and npm (for the frontend).
+. PostgreSQL 14 or higher.
+. An API key from Google AI Studio (Gemini).
 
-### 1. Backend Setup (bot folder)
+## Step 1. Database Setup
 
-First, navigate into the backend directory.
-```bash
-cd bot
-```
+The bot needs a special extension called pgvector to handle AI data.
 
-Create a virtual environment to keep your global Python clean.
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows use: venv\\Scripts\\activate
-```
+1. Install PostgreSQL on your system.
+2. Open your terminal and install pgvector. If you are on a Mac with Homebrew, you can use the command: brew install pgvector.
+3. Create a new database named bot_db.
+4. Open your database tool or terminal and run this command: CREATE EXTENSION IF NOT EXISTS vector. This is very important for the AI features.
 
-Install the necessary packages.
-```bash
-pip install -r requirements.txt
-pip install --upgrade google-generativeai
-```
+## Step 2. Backend Installation (Python)
 
-Create a file named `.env` in the bot folder and add your key.
-```text
-GEMINI_API_KEY=your_key_here
-```
+Follow these steps to set up the server logic.
 
-Start the FastAPI server.
-```bash
-fastapi dev app/main.py
-```
+1. Open your terminal and go to the bot folder.
+2. Create a virtual environment. This keeps the project files separate from your computer system. Run: python3 -m venv venv.
+3. Activate the environment. On Mac, use: source venv/bin/activate. On Windows, use: venv\Scripts\activate.
+4. Install all the required Python packages. Run: pip install -r requirements.txt.
+5. Create a file named .env in the bot folder. This is where you will save your private keys.
 
-### 2. Frontend Setup (bot-ui folder)
+## Step 3. How to Connect the Database
 
-Open a new terminal and go to the frontend directory.
-```bash
-cd bot-ui
-```
+Inside your .env file, you need to tell the bot how to find your database. Use this format.
 
-Install the Node.js dependencies.
-```bash
-npm install
-```
+. DATABASE_URL=postgresql+asyncpg://USERNAME:PASSWORD@localhost:5432/bot_db.
 
-Start the React development server.
-```bash
-npm run dev
-```
+Replace USERNAME and PASSWORD with your actual PostgreSQL credentials. Also, add your Gemini key in the same file as: GEMINI_API_KEY=your_key_here.
 
-## How to Use
+## Step 4. Frontend Setup (React)
 
-1. Ensure your Python backend is running on port 8000.
-2. Ensure your React app is running on port 5173.
-3. Open `http://localhost:5173` in your browser.
+This is the part that creates the chat screen.
 
-## Future Roadmap
+1. Open a new terminal window and go to the bot-ui folder.
+2. Install the necessary packages. Run: npm install.
+3. This may take a minute. Once it is finished, you are ready to start.
 
-* Add RAG support for custom data.
-* Add support for OpenAI and Claude.
-* Implement database storage for chat history.
+## Step 5. How to Use the Bot
 
-Developed by Mukarram Hussain (Tech with muk)
-"""
+1. Start the backend. In the bot folder terminal, run: fastapi dev app/main.py.
+2. The terminal will show that the server is running on http://127.0.0.1:8000.
+3. Start the frontend. In the bot-ui folder terminal, run: npm run dev.
+4. Open the link shown in the terminal (usually http://localhost:5173).
+5. Register a new account, log in, and start asking questions about Saudi tenders.
+
+## Technical Stack
+
+. Backend. FastAPI (Python).
+. Frontend. React.js.
+. Database. PostgreSQL with pgvector.
+. AI Model. Gemini 2.5 Flash.
+. Authentication. JWT (JSON Web Tokens).
+
+## License
+
+This project is developed for professional use in the KSA contracting market.

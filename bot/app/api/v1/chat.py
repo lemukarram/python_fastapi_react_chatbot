@@ -1,28 +1,40 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat_service import ChatService
 from app.core.db import get_async_session
 from app.core.auth import current_active_user
 from app.models.models import User
 
-router = APIRouter()
+chat_router = APIRouter()
 
-@router.post("/message", response_model=ChatResponse)
+@chat_router.get("/history", response_model=List[dict])
+async def get_chat_history(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
+):
+    """
+    Fetches the full chat history for the logged-in user.
+    """
+    try:
+        service = ChatService(db)
+        return await service.get_history(user.id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Could not load chat history.")
+
+@chat_router.post("/message", response_model=ChatResponse)
 async def send_message(
     request: ChatRequest, 
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user)
 ):
     """
-    Handles incoming messages for authenticated users.
-    It uses the user's unique ID to manage private chat history and RAG context.
+    Processes the chat message through the AI.
     """
-    # We initialize the ChatService with the current database session
-    service = ChatService(db)
-    
-    # We use the authenticated user's ID as the session identifier
-    # This ensures that User A never sees User B's chat history
-    reply = await service.chat(user.id, request.message)
-    
-    return ChatResponse(reply=reply)
+    try:
+        service = ChatService(db)
+        reply = await service.chat(user.id, request.message)
+        return ChatResponse(reply=reply)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="AI processing failed.")
