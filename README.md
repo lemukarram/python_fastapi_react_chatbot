@@ -20,7 +20,7 @@ The easiest way to run this project is using Docker. This ensures that the datab
 ### Step 1. Prepare your Environment
 Create a file named .env in the root directory of the project and add your credentials.
 
-GEMINI_API_KEY="AIzaSyBuz7riEJr4EMgpHjyHpk2T9i-cWhLZ6Q0"
+GEMINI_API_KEY="AIzaSy-google-api-key"
 SECRET_KEY="RIYADH_TECH_WITH_MUK_SECURE_TOKEN_2024"
 PROJECT_NAME="AI Chatbot Pro"
 
