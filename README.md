@@ -49,6 +49,8 @@ Follow these steps to set up the server.
    . Add your keys inside like this.
    . GEMINI_API_KEY=your_key_here
    . DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/bot_db
+   . SECRET_KEY="RIYADH_TECH_WITH_MUK_SECURE_TOKEN_2024"
+   . PROJECT_NAME="AI Chatbot Pro"
 
 ---
 

@@ -1,0 +1,57 @@
+services:
+  # Database Service with pgvector support
+  db:
+    image: ankane/pgvector:latest
+    container_name: tender_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-myuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mypassword}
+      POSTGRES_DB: ${DB_NAME:-bot_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d bot_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Service (Folder: /bot)
+  backend:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: tender_backend
+    restart: always
+    environment:
+      # Use the 'db' service name instead of localhost for internal communication
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-myuser}:${DB_PASSWORD:-mypassword}@db:5432/${DB_NAME:-bot_db}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      SECRET_KEY: ${SECRET_KEY}
+      PROJECT_NAME: ${PROJECT_NAME}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # React Frontend Service (Folder: /bot-ui)
+  frontend:
+    build:
+      context: ./bot-ui
+      dockerfile: Dockerfile
+    container_name: tender_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
