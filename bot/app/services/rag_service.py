@@ -25,14 +25,14 @@ class RAGService:
 
     async def get_embedding(self, text_to_embed: str):
         try:
-            print(f"===== before embedding 400 ====")
+            
             # New method for generating embeddings
             result = self.client.models.embed_content(
                 model="gemini-embedding-001",
                 contents=text_to_embed,
                 config=types.EmbedContentConfig(output_dimensionality=768)
             )
-            print(f"===== after embedding 400 ====")
+            
             if result and result.embeddings:
                 return result.embeddings[0].values
             
@@ -44,9 +44,9 @@ class RAGService:
 
     async def search_context(self, db: AsyncSession, query_text: str, limit: int = 3) -> str:
         query_embedding = await self.get_embedding(query_text)
-        print(f" ------- gemini emdeding-100------")
+        
         if not query_embedding:
-            print(f" ------- gemini emdeding-0------")
+            
             return []
         try:
             # Using the vector distance search in Postgres

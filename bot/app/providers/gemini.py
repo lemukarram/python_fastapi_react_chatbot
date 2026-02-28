@@ -15,10 +15,7 @@ class GeminiClientManager:
         if cls._client is None:
             # Initialize the client only if it hasn't been created yet
             cls._client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
-            if (cls._client) :
-                print(f" ======== client created.....")
-            else:
-                print(f" ======== Sir client nhi bna")
+            
         return cls._client
 
 class GeminiProvider(BaseAIProvider):

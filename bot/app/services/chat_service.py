@@ -6,20 +6,18 @@ from app.providers.gemini import GeminiProvider
 
 class ChatService:
     def __init__(self, db: AsyncSession):
-        print(f"======= creating chat service object =======")
+        
         self.db = db
         # Initialize RAG for tender searching
         self.rag = RAGService()
-        print(f"======= Rag initialized =======")
         # Initialize Gemini AI
         self.ai = GeminiProvider()
-        print(f"======= Gemini object created =======")
 
     async def get_history(self, user_id):
         """
         Fetches all previous messages for a user to show in the UI.
         """
-        print(f"======= in the get_history method =======")
+        
         stmt = (
             select(ChatMessage)
             .where(ChatMessage.user_id == user_id)
@@ -34,15 +32,12 @@ class ChatService:
         Handles the conversation, saves history, and cleans the AI response.
         """
 
-        print(f"before fetching the context")
-
         # 1. Search RAG context
         sources = await self.rag.search_context(self.db, message)
-        print(f"after fetching the context")
+        
         # 2. Join them for the AI to read as context
         context = "\n".join(sources) if sources else "No specific context found."
-        
-        print(f"context setup {context}")
+
 
         try:
             # 2. Get last 5 messages for AI context
