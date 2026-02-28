@@ -1,98 +1,79 @@
 
-# RSG Tender Chat BOT
+# RSG Tender Chat BOT (AI Chatbot Pro)
 
-A specialized AI assistant built to help contractors and businesses navigate the Saudi Arabian tender market. It provides expert advice on the Etimad platform. local procurement laws. and bidding requirements.
+A specialized AI assistant built to help contractors and businesses navigate the Saudi Arabian tender market. It provides expert advice on the Etimad platform, local procurement laws, and bidding requirements.
 
 ## Project Overview
 
-The RSG Tender Chat BOT uses Gemini 2.5 Flash to answer questions. It is a full-stack system that includes a database to remember your chat history and search through tender documents.
+The RSG Tender Chat BOT uses Gemini 2.5 Flash to answer questions. It is a full-stack system that includes a database to remember your chat history and search through tender documents using vector embeddings.
 
-## Requirements
+## Modern Setup with Docker (Recommended)
 
-Before you start. make sure you have these installed on your computer.
+The easiest way to run this project is using Docker. This ensures that the database, pgvector extension, backend, and frontend all work together perfectly without manual configuration.
 
-1. Python 3.10 or higher.
-2. Node.js (for the frontend).
-3. PostgreSQL database.
-
----
-
-## Step 1. Database Configuration
-
-You must enable the vector extension in your database for the AI to work.
-
-1. Create a new database in PostgreSQL named bot_db.
-2. Open your terminal or a tool like pgAdmin.
-3. Run this command: CREATE EXTENSION IF NOT EXISTS vector.
+### Prerequisites
+1. Docker Desktop installed on your computer.
+2. Git to clone the repository.
 
 ---
 
-## Step 2. Backend Setup (Python)
+### Step 1. Prepare your Environment
+Create a file named .env in the root directory of the project and add your credentials.
 
-Follow these steps to set up the server.
+GEMINI_API_KEY="AIzaSy-google-api-key"
+SECRET_KEY="RIYADH_TECH_WITH_MUK_SECURE_TOKEN_2024"
+PROJECT_NAME="AI Chatbot Pro"
 
-1. Open your terminal and go to the bot folder.
-   . Command: cd bot
+# Database credentials for the container
+DB_USER=myuser
+DB_PASSWORD=mypassword
+DB_NAME=bot_db
+DATABASE_URL="postgresql+asyncpg://myuser:mypassword@db:5432/bot_db"
 
-2. Create a virtual environment.
-   . Command: python -m venv venv
+### Step 2. Run the Project
+Open your terminal in the project root and run this command.
 
-3. Activate the virtual environment.
-   . For Mac or Linux: source venv/bin/activate
-   . For Windows: venv\\Scripts\\activate
+docker-compose up --build
 
-4. Install all the necessary Python packages.
-   . Command: pip install -r requirements.txt
+This command will.
+1. Set up a PostgreSQL database with pgvector pre-installed.
+2. Build and start the FastAPI backend (with automatic reload).
+3. Build and start the React frontend using the legacy-peer-deps fix for npm.
 
-5. Create a .env file.
-   . Create a new file named .env in the bot folder.
-   . Add your keys inside like this.
-   . GEMINI_API_KEY=your_key_here
-   . DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/bot_db
-   . SECRET_KEY="RIYADH_TECH_WITH_MUK_SECURE_TOKEN_2024"
-   . PROJECT_NAME="AI Chatbot Pro"
-
----
-
-## Step 3. Frontend Setup (React)
-
-Follow these steps to set up the chat screen.
-
-1. Open a new terminal window.
-2. Go to the UI folder.
-   . Command: cd bot-ui
-
-3. Install the dependencies.
-   . Command: npm install
+### Step 3. Access the Application
+* Frontend. http://localhost:3000
+* API Documentation. http://localhost:8000/docs
+* Database Port. 5432 (Internal access via 'db' service)
 
 ---
 
-## Step 4. How to Run the Project
+## Troubleshooting
 
-You must have two terminals open. one for the backend and one for the frontend.
+### Port 8000 already in use
+If you see an error about port 8000 being allocated, another process is using it.
+Fix. Run 'lsof -i :8000' to find the PID, then 'kill -9 PID' to stop it.
 
-1. Start the Backend.
-   . Go to the bot folder.
-   . Ensure the venv is active.
-   . Command: fastapi dev app/main.py
+### Git Branch Name
+If you cannot push to main, your local branch might be named master.
+Fix. Run 'git branch -m master main' to rename it.
 
-2. Start the Frontend.
-   . Go to the bot-ui folder.
-   . Command: npm run dev
-
-3. Open your browser.
-   . Go to the link shown in the terminal (usually http://localhost:5173).
+### NPM Install Errors
+If you see dependency conflicts, the Dockerfile is configured to use '--legacy-peer-deps' to bypass these issues automatically.
 
 ---
 
 ## Technical Details
 
-. Backend. FastAPI.
-. Frontend. React.
-. AI Model. Gemini 2.5 Flash.
-. Database. PostgreSQL with pgvector.
-. Security. JWT Authentication.
+* Backend. FastAPI (Python 3.11).
+* Frontend. React (Vite).
+* AI Model. Gemini 2.5 Flash.
+* Database. PostgreSQL with pgvector for vector search.
+* Security. JWT Authentication via FastAPI Users.
 
-## License
+## Project Structure
+* /bot. FastAPI backend code.
+* /bot-ui. React frontend code.
+* docker-compose.yml. Orchestration for all services.
 
-This software is for professional use in the KSA contracting and tender market.
+## Credits
+Created by Mukarram Hussain (Tech with muk). Professional use for KSA Contracting & Tender Market.
