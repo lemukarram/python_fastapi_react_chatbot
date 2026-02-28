@@ -9,31 +9,32 @@ from app.api.v1.chat import chat_router
 from app.schemas.user import UserRead, UserCreate
 from app.core.config import settings
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("--- Starting Tech with muk AI Bot ---")
     try:
         async with engine.connect() as conn:
-            version_result = await conn.execute(text("SELECT version();"))
-            logger.info(f"Connected to: {version_result.scalar()}")
+            await conn.execute(text("SELECT version();"))
         
         await create_db_and_tables()
-        logger.info("Database tables are ready.")
+        
     except Exception as e:
-        logger.error(f"Startup Failure: {str(e)}")
+        # We still need to pass the error string to the exception so you get at least some clue
+        raise RuntimeError(f"Database startup failed: {str(e)}") from e
+        
     yield
-    logger.info("--- Shutting down ---")
 
-app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
+app = FastAPI(title=settings.project_name, lifespan=lifespan)
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    #allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

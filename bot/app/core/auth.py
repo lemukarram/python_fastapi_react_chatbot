@@ -4,13 +4,13 @@ from fastapi import Depends, Request
 from fastapi_users import FastAPIUsers, BaseUserManager, UUIDIDMixin
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport, JWTStrategy
 from app.core.db import User, get_user_db
-
-SECRET = "SECRET_KEY_FOR_RIYADH_DEV" # Change this in production!
+from app.core.config import settings
 
 bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
 
 def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(secret=SECRET, lifetime_seconds=3600)
+    # Use this to reveal the real value in your terminal/docker logs
+    return JWTStrategy(secret=settings.secret_key, lifetime_seconds=3600)
 
 auth_backend = AuthenticationBackend(
     name="jwt",
@@ -19,8 +19,8 @@ auth_backend = AuthenticationBackend(
 )
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-    reset_password_token_secret = SECRET
-    verification_token_secret = SECRET
+    reset_password_token_secret = settings.secret_key
+    verification_token_secret = settings.secret_key
 
 async def get_user_manager(user_db=Depends(get_user_db)):
     yield UserManager(user_db)

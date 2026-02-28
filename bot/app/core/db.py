@@ -6,11 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import settings
 from app.models.models import User, Base
 
-# We use the DATABASE_URL from our .env file
-DATABASE_URL = settings.DATABASE_URL
-
 # Create the engine to talk to Postgres
-engine = create_async_engine(DATABASE_URL)
+engine = create_async_engine(settings.database_url.unicode_string())
 
 # This creates the session factory
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)

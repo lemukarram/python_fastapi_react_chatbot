@@ -25,12 +25,9 @@ services:
       dockerfile: Dockerfile
     container_name: tender_backend
     restart: always
-    environment:
-      # Use the 'db' service name instead of localhost for internal communication
-      DATABASE_URL: postgresql+asyncpg://${DB_USER:-myuser}:${DB_PASSWORD:-mypassword}@db:5432/${DB_NAME:-bot_db}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      SECRET_KEY: ${SECRET_KEY}
-      PROJECT_NAME: ${PROJECT_NAME}
+    env_file:
+      # This automatically injects GEMINI_API_KEY, SECRET_KEY, PROJECT_NAME
+      - ./bot/.env
     ports:
       - "8000:8000"
     depends_on:

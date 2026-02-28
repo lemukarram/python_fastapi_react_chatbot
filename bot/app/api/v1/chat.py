@@ -17,8 +17,10 @@ async def get_chat_history(
     """
     Fetches the full chat history for the logged-in user.
     """
+    print(f" ======= inside the get_chat_history 12 ===== ")
     try:
         service = ChatService(db)
+        print(f" ======= Chat service created successfully ===== ")
         return await service.get_history(user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Could not load chat history.")
@@ -34,7 +36,11 @@ async def send_message(
     """
     try:
         service = ChatService(db)
-        reply = await service.chat(user.id, request.message)
-        return ChatResponse(reply=reply)
+        result = await service.chat(user.id, request.message)
+        # We pass both fields to the ChatResponse schema
+        return ChatResponse(
+            reply=result.get("reply", "No response generated."),
+            sources=result.get("sources", [])
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail="AI processing failed.")

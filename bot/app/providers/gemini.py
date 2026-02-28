@@ -3,11 +3,48 @@ from google.genai import types
 from app.providers.base import BaseAIProvider
 from app.core.config import settings
 
+class GeminiClientManager:
+    """
+    Singleton manager for the Gemini client.
+    This ensures we only create one client instance for the entire application lifecycle.
+    """
+    _client = None
+
+    @classmethod
+    def get_client(cls):
+        if cls._client is None:
+            # Initialize the client only if it hasn't been created yet
+            cls._client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
+            if (cls._client) :
+                print(f" ======== client created.....")
+            else:
+                print(f" ======== Sir client nhi bna")
+        return cls._client
+
 class GeminiProvider(BaseAIProvider):
-    def __init__(self):
-        # We use the new client with your API key
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    """
+    Singleton implementation of the Gemini Provider.
+    This ensures that the system instructions and AI settings are consistent.
+    """
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            # Create the instance only if it does not exist
+            cls._instance = super(GeminiProvider, cls).__new__(cls)
+            # Run the initialization logic only once
+            cls._instance._init_provider()
+        return cls._instance
+
+    def _init_provider(self):
+        """
+        Internal initialization method for the singleton instance.
+        """
         self.model_id = "gemini-2.5-flash"
+        # We fetch the singleton client from the manager
+        self.client = None
+        
+        # Expert Tender Assistant Instructions
         self.system_instruction = (
             "You are an expert consultant for the Saudi Arabian Tendering and Contracting market. "
             "Your goal is to assist users with navigating the Etimad platform and complying with "
@@ -33,11 +70,9 @@ class GeminiProvider(BaseAIProvider):
 
     async def get_response(self, prompt: str, history: list = None) -> str:
         """
-        Communicates with Gemini using the new SDK.
-        Fixed the 'Extra inputs' error by moving history out of the config block.
+        Uses the managed singleton client instance to avoid initialization errors.
         """
         try:
-            # We map our database history to the format Gemini expects
             formatted_history = []
             if history:
                 for entry in history:
@@ -47,8 +82,10 @@ class GeminiProvider(BaseAIProvider):
                         "parts": [{"text": entry["content"]}]
                     })
 
-            # The 'history' parameter must be passed directly to create(), 
-            # NOT inside GenerateContentConfig.
+            if self.client is None:
+                self.client = GeminiClientManager.get_client()
+
+            # Create the chat session using the managed client
             chat = self.client.chats.create(
                 model=self.model_id,
                 history=formatted_history,
@@ -57,14 +94,16 @@ class GeminiProvider(BaseAIProvider):
                 )
             )
 
-            # Send the new message with the context
             response = chat.send_message(prompt)
             
             if response and response.text:
                 return response.text
             
-            return "I received an empty response. Please try again."
+            return "The AI assistant could not generate a reply. Please try again."
 
         except Exception as e:
-            # This will help you debug during your 'Tech with muk' sessions
-            return f"Gemini Error: {str(e)}"
+            # We log the error on the server for you to see in Docker.
+            print(f"Internal AI Error: {str(e)}")
+            # Instead of returning the error string to the user, we raise it.
+            # This triggers the generic error message in your ChatService or Router.
+            raise e

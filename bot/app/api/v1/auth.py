@@ -19,7 +19,7 @@ def get_jwt_strategy() -> JWTStrategy:
     Handles the creation and validation of the JSON Web Token (JWT).
     The lifetime is set to 1 hour (3600 seconds).
     """
-    return JWTStrategy(secret=settings.SECRET_KEY, lifetime_seconds=3600)
+    return JWTStrategy(secret=settings.secret_key, lifetime_seconds=3600)
 
 # This combines the transport and the strategy into a single backend.
 auth_backend = AuthenticationBackend(
@@ -32,8 +32,8 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     """
     This class handles user lifecycle events like registration and password resets.
     """
-    reset_password_token_secret = settings.SECRET_KEY
-    verification_token_secret = settings.SECRET_KEY
+    reset_password_token_secret = settings.secret_key
+    verification_token_secret = settings.secret_key
 
 async def get_user_manager(user_db=Depends(get_user_db)):
     """
