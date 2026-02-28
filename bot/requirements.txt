@@ -8,3 +8,9 @@ fastapi-users[sqlalchemy]
 asyncpg
 pgvector
 sqlalchemy[ext]
+alembic
+# Testing
+pytest
+pytest-asyncio
+httpx
+aiosqlite

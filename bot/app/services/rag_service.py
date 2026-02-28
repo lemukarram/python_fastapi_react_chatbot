@@ -42,6 +42,24 @@ class RAGService:
             print(f"Embedding error: {e}")
             return None
 
+    async def ingest_texts(self, db: AsyncSession, texts: list) -> int:
+        """
+        Embeds each text chunk and inserts it into the knowledge_base table.
+        Returns the number of successfully inserted records.
+        """
+        inserted = 0
+        for text_chunk in texts:
+            embedding = await self.get_embedding(text_chunk)
+            if embedding is None:
+                print(f"Skipping chunk — embedding failed: {text_chunk[:60]}")
+                continue
+            record = KnowledgeBase(content=text_chunk, embedding=embedding)
+            db.add(record)
+            inserted += 1
+        if inserted > 0:
+            await db.commit()
+        return inserted
+
     async def search_context(self, db: AsyncSession, query_text: str, limit: int = 3) -> str:
         query_embedding = await self.get_embedding(query_text)
         

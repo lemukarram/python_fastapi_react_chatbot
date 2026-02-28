@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-from app.core.db import create_db_and_tables, engine
+from app.core.db import engine
 from app.core.auth import fastapi_users, auth_backend
 from app.api.v1.chat import chat_router
 from app.schemas.user import UserRead, UserCreate
@@ -11,16 +11,14 @@ from app.core.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Just verify the DB connection is alive on startup.
+    # Table creation is now handled by Alembic migrations.
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT version();"))
-        
-        await create_db_and_tables()
-        
     except Exception as e:
-        # We still need to pass the error string to the exception so you get at least some clue
-        raise RuntimeError(f"Database startup failed: {str(e)}") from e
-        
+        raise RuntimeError(f"Database connection failed: {str(e)}") from e
+
     yield
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)

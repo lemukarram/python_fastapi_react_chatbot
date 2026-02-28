@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse, IngestRequest, IngestResponse
 from app.services.chat_service import ChatService
+from app.services.rag_service import RAGService
 from app.core.db import get_async_session
 from app.core.auth import current_active_user
 from app.models.models import User
@@ -42,3 +43,25 @@ async def send_message(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail="AI processing failed.")
+
+@chat_router.post("/ingest", response_model=IngestResponse)
+async def ingest_documents(
+    request: IngestRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
+):
+    """
+    Ingests one or more text chunks into the knowledge base.
+    Each chunk is embedded via Gemini and stored in the vector DB.
+    Requires a valid JWT token (any logged-in user can ingest).
+    """
+    try:
+        rag = RAGService()
+        inserted = await rag.ingest_texts(db, request.texts)
+        return IngestResponse(
+            inserted=inserted,
+            message=f"Successfully inserted {inserted} of {len(request.texts)} chunk(s) into the knowledge base."
+        )
+    except Exception as e:
+        print(f"Ingest error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to ingest documents.")

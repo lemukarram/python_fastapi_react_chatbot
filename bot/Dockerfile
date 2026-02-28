@@ -26,6 +26,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Since your code is in /bot/app/main.py, the command must be app.main:app
-# We use 0.0.0.0 to make it accessible outside the container
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run Alembic migrations first, then start the server
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
