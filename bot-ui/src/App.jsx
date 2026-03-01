@@ -1,49 +1,57 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ShieldCheck, Users, MessageSquare, BookOpen, Upload, Trash2, ArrowLeft } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
 
 export default function App() {
+  // ── Auth state ─────────────────────────────────────────────────────────────
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [userEmail, setUserEmail] = useState(localStorage.getItem('userEmail') || '');
+  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true');
   const [view, setView] = useState(token ? 'chat' : 'login');
+
+  // ── Auth form state ─────────────────────────────────────────────────────────
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Knowledge base panel state
-  const [showIngest, setShowIngest] = useState(false);
-  const [ingestText, setIngestText] = useState('');
-  const [ingestLoading, setIngestLoading] = useState(false);
-  const [ingestMsg, setIngestMsg] = useState(null); // { type: 'success'|'error', text: string }
+  // ── Chat state ──────────────────────────────────────────────────────────────
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const chatEndRef = useRef(null);
+  // ── Admin panel state ───────────────────────────────────────────────────────
+  const [adminTab, setAdminTab] = useState('users');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminChats, setAdminChats] = useState([]);
+  const [adminKnowledge, setAdminKnowledge] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState('');
+  const [kbText, setKbText] = useState('');
+  const [kbFileLoading, setKbFileLoading] = useState(false);
+  const [kbMsg, setKbMsg] = useState(null);
+
+  const chatBoxRef = useRef(null);
 
   useEffect(() => {
-    if (token && view === 'chat') {
-      fetchHistory();
-    }
+    if (token && view === 'chat') fetchHistory();
   }, [token, view]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatBoxRef.current) {
+      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+    }
   }, [messages]);
 
+  // ── Auth handlers ───────────────────────────────────────────────────────────
   const fetchHistory = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/v1/history`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data);
-      }
-    } catch (err) {
-      console.error("Failed to load history.");
-    }
+      if (res.ok) setMessages(await res.json());
+    } catch { console.error('Failed to load history.'); }
   };
 
   const handleRegister = async (e) => {
@@ -53,19 +61,17 @@ export default function App() {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        setSuccess("Registration successful. You can now login.");
+        setSuccess('Registration successful. You can now login.');
         setView('login');
         setPassword('');
       } else {
         const data = await res.json();
-        setError(data.detail || "Registration failed. Please try again.");
+        setError(data.detail || 'Registration failed. Please try again.');
       }
-    } catch (err) {
-      setError("Cannot connect to server.");
-    }
+    } catch { setError('Cannot connect to server.'); }
   };
 
   const handleLogin = async (e) => {
@@ -78,129 +84,163 @@ export default function App() {
       const res = await fetch(`${API_BASE}/auth/jwt/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
+        body: formData,
       });
       const data = await res.json();
       if (res.ok) {
-        setToken(data.access_token);
+        const { access_token } = data;
+        // Fetch profile to determine admin status — is_superuser is not in the JWT payload
+        const meRes = await fetch(`${API_BASE}/users/me`, {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        const meData = await meRes.json();
+        const superuser = meData.is_superuser ?? false;
+
+        setToken(access_token);
         setUserEmail(email);
-        localStorage.setItem('token', data.access_token);
+        setIsAdmin(superuser);
+        localStorage.setItem('token', access_token);
         localStorage.setItem('userEmail', email);
+        localStorage.setItem('isAdmin', String(superuser));
         setView('chat');
       } else {
-        setError("Invalid email or password.");
+        setError('Invalid email or password.');
       }
-    } catch (err) {
-      setError("Connection error.");
-    }
+    } catch { setError('Connection error.'); }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userEmail');
-    setToken(''); setUserEmail('');
+    localStorage.removeItem('isAdmin');
+    setToken(''); setUserEmail(''); setIsAdmin(false);
     setMessages([]);
     setView('login');
   };
 
+  // ── Chat handlers ───────────────────────────────────────────────────────────
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
-    const userMsg = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => [...prev, { role: 'user', content: input }]);
     setInput('');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/message`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ message: input })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: input }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setMessages(prev => [...prev, { role: 'bot', content: data.reply, sources: data.sources || [] }]);
-      }
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'bot', content: "Error connecting to server." }]);
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) setMessages(prev => [...prev, { role: 'bot', content: data.reply, sources: data.sources || [] }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'bot', content: 'Error connecting to server.' }]);
+    } finally { setLoading(false); }
   };
 
-  const handleIngest = async (e) => {
+  // ── Admin handlers ──────────────────────────────────────────────────────────
+  const authHeader = { Authorization: `Bearer ${token}` };
+
+  const fetchAdminUsers = async () => {
+    const res = await fetch(`${API_BASE}/api/v1/admin/users`, { headers: authHeader });
+    if (res.ok) setAdminUsers(await res.json());
+  };
+  const fetchAdminChats = async () => {
+    const res = await fetch(`${API_BASE}/api/v1/admin/chats`, { headers: authHeader });
+    if (res.ok) setAdminChats(await res.json());
+  };
+  const fetchAdminKnowledge = async () => {
+    const res = await fetch(`${API_BASE}/api/v1/admin/knowledge`, { headers: authHeader });
+    if (res.ok) setAdminKnowledge(await res.json());
+  };
+
+  const openAdminPanel = async () => {
+    setAdminLoading(true); setAdminError(''); setKbMsg(null);
+    try {
+      await Promise.all([fetchAdminUsers(), fetchAdminChats(), fetchAdminKnowledge()]);
+    } catch { setAdminError('Failed to load admin data.'); }
+    finally { setAdminLoading(false); }
+    setView('admin');
+  };
+
+  const deleteKnowledgeEntry = async (id) => {
+    await fetch(`${API_BASE}/api/v1/admin/knowledge/${id}`, {
+      method: 'DELETE', headers: authHeader,
+    });
+    setAdminKnowledge(prev => prev.filter(k => k.id !== id));
+  };
+
+  const handleKbTextIngest = async (e) => {
     e.preventDefault();
-    if (!ingestText.trim()) return;
-
-    // Split by double newline so the user can add multiple chunks at once
-    const chunks = ingestText
-      .split(/\n\n+/)
-      .map(c => c.trim())
-      .filter(c => c.length > 0);
-
-    setIngestLoading(true);
-    setIngestMsg(null);
+    const chunks = kbText.split(/\n\n+/).map(c => c.trim()).filter(Boolean);
+    setKbMsg(null);
     try {
       const res = await fetch(`${API_BASE}/api/v1/ingest`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ texts: chunks })
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ texts: chunks }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setIngestMsg({ type: 'success', text: data.message });
-        setIngestText('');
-      } else {
-        setIngestMsg({ type: 'error', text: data.detail || 'Ingest failed.' });
-      }
-    } catch (err) {
-      setIngestMsg({ type: 'error', text: 'Cannot connect to server.' });
-    } finally {
-      setIngestLoading(false);
-    }
+      if (res.ok) { setKbMsg({ type: 'success', text: data.message }); setKbText(''); await fetchAdminKnowledge(); }
+      else setKbMsg({ type: 'error', text: data.detail || 'Failed.' });
+    } catch { setKbMsg({ type: 'error', text: 'Cannot connect to server.' }); }
   };
 
+  const handleKbFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setKbFileLoading(true); setKbMsg(null);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/knowledge/upload`, {
+        method: 'POST', headers: authHeader, body: form,
+      });
+      const data = await res.json();
+      if (res.ok) { setKbMsg({ type: 'success', text: data.message }); await fetchAdminKnowledge(); }
+      else setKbMsg({ type: 'error', text: data.detail || 'Upload failed.' });
+    } catch { setKbMsg({ type: 'error', text: 'Cannot connect to server.' }); }
+    finally { setKbFileLoading(false); e.target.value = ''; }
+  };
+
+  // ── Inline styles (chat + auth panels — unchanged from original) ────────────
   const styles = {
-    container: { fontFamily: 'sans-serif', maxWidth: '640px', margin: '20px auto', padding: '20px', backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px' },
+    container: { fontFamily: 'sans-serif', maxWidth: '720px', margin: '20px auto', padding: '20px', backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px' },
     chatBox: { height: '400px', overflowY: 'auto', marginBottom: '15px', padding: '10px', backgroundColor: '#fdfdfd', border: '1px solid #f0f0f0', borderRadius: '8px' },
     user: { backgroundColor: '#007bff', color: '#ffffff', float: 'right', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px' },
     bot: { backgroundColor: '#f1f1f1', color: '#333', float: 'left', clear: 'both', borderRadius: '8px', maxWidth: '80%', padding: '8px 12px', margin: '8px 5px' },
     input: { width: '80%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' },
     btn: { padding: '10px 20px', borderRadius: '6px', backgroundColor: '#007bff', color: 'white', border: 'none', cursor: 'pointer' },
     toggleLink: { color: '#007bff', cursor: 'pointer', textDecoration: 'underline', marginTop: '15px', display: 'block', fontSize: '14px' },
-    ingestPanel: { marginTop: '16px', padding: '14px', backgroundColor: '#f8f9ff', border: '1px solid #d0d8ff', borderRadius: '8px' },
     textarea: { width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '13px', resize: 'vertical', minHeight: '110px' },
   };
 
   return (
     <div style={styles.container}>
 
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
         <h2 style={{ margin: 0 }}>RSG Tender BOT</h2>
         {token && (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => { setShowIngest(v => !v); setIngestMsg(null); }}
-              style={{ ...styles.btn, backgroundColor: showIngest ? '#5a32a3' : '#6f42c1', fontSize: '13px', padding: '8px 14px' }}
-            >
-              {showIngest ? 'Close Knowledge Base' : '+ Knowledge Base'}
-            </button>
+            {isAdmin && view !== 'admin' && (
+              <button
+                onClick={openAdminPanel}
+                style={{ ...styles.btn, backgroundColor: '#b45309', fontSize: '13px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '5px' }}
+              >
+                <ShieldCheck size={14} /> Admin Panel
+              </button>
+            )}
             <button onClick={handleLogout} style={{ ...styles.btn, backgroundColor: '#dc3545' }}>Logout</button>
           </div>
         )}
       </div>
 
-      {/* Global alerts */}
+      {/* ── Global alerts ──────────────────────────────────────────────────── */}
       {success && <p style={{ color: 'green', backgroundColor: '#eaffea', padding: '10px', borderRadius: '6px' }}>{success}</p>}
       {error   && <p style={{ color: 'red',   backgroundColor: '#ffeaea', padding: '10px', borderRadius: '6px' }}>{error}</p>}
 
-      {/* Login */}
+      {/* ── Login ──────────────────────────────────────────────────────────── */}
       {view === 'login' && (
         <form onSubmit={handleLogin}>
           <h3>Login</h3>
@@ -211,7 +251,7 @@ export default function App() {
         </form>
       )}
 
-      {/* Register */}
+      {/* ── Register ───────────────────────────────────────────────────────── */}
       {view === 'register' && (
         <form onSubmit={handleRegister}>
           <h3>Create Account</h3>
@@ -222,13 +262,12 @@ export default function App() {
         </form>
       )}
 
-      {/* Chat view */}
+      {/* ── Chat view ──────────────────────────────────────────────────────── */}
       {view === 'chat' && (
         <div>
           <p style={{ fontSize: '12px', color: '#666' }}>Logged in as: {userEmail}</p>
 
-          {/* Chat messages */}
-          <div style={styles.chatBox}>
+          <div ref={chatBoxRef} style={styles.chatBox}>
             {messages.map((m, i) => (
               <div key={i} style={m.role === 'user' ? styles.user : styles.bot}>
                 <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
@@ -245,48 +284,165 @@ export default function App() {
               </div>
             ))}
             {loading && <div style={styles.bot}>Typing...</div>}
-            <div ref={chatEndRef} />
           </div>
 
-          {/* Message input */}
           <form onSubmit={sendMessage} style={{ display: 'flex', gap: '5px' }}>
             <input style={{ ...styles.input, flexGrow: 1 }} value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message..." />
             <button type="submit" style={styles.btn}>Send</button>
           </form>
 
-          {/* Knowledge Base ingest panel */}
-          {showIngest && (
-            <div style={styles.ingestPanel}>
-              <h4 style={{ margin: '0 0 6px 0', color: '#3d2a8a' }}>Add to Knowledge Base</h4>
-              <p style={{ fontSize: '12px', color: '#666', margin: '0 0 10px 0' }}>
-                Paste tender knowledge below. Separate multiple entries with a blank line — each block will be stored as its own searchable chunk.
-              </p>
-              <form onSubmit={handleIngest}>
-                <textarea
-                  style={styles.textarea}
-                  value={ingestText}
-                  onChange={e => setIngestText(e.target.value)}
-                  placeholder={`Example:\nEtimad platform requires CR registration before bidding.\n\nBid security must be 1%–2% of the total tender value.\n\nLCGPA requires a minimum 30% Saudi workforce for compliance.`}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                  <button
-                    type="submit"
-                    disabled={ingestLoading || !ingestText.trim()}
-                    style={{ ...styles.btn, backgroundColor: ingestLoading ? '#aaa' : '#6f42c1', cursor: ingestLoading ? 'not-allowed' : 'pointer' }}
-                  >
-                    {ingestLoading ? 'Saving...' : 'Save to Knowledge Base'}
-                  </button>
-                </div>
-              </form>
-              {ingestMsg && (
-                <p style={{
-                  marginTop: '10px', padding: '8px 12px', borderRadius: '6px', fontSize: '13px',
-                  color: ingestMsg.type === 'success' ? 'green' : 'red',
-                  backgroundColor: ingestMsg.type === 'success' ? '#eaffea' : '#ffeaea'
-                }}>
-                  {ingestMsg.text}
+        </div>
+      )}
+
+      {/* ── Admin Panel ────────────────────────────────────────────────────── */}
+      {view === 'admin' && (
+        <div>
+          {/* Back button */}
+          <button onClick={() => setView('chat')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#007bff', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '12px', padding: 0 }}>
+            <ArrowLeft size={14} /> Back to Chat
+          </button>
+
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <ShieldCheck size={20} color="#b45309" /> Admin Panel
+          </h3>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', borderBottom: '2px solid #e5e7eb', paddingBottom: '8px' }}>
+            {[
+              { key: 'users',     label: 'Users',          Icon: Users },
+              { key: 'chats',     label: 'Chats',          Icon: MessageSquare },
+              { key: 'knowledge', label: 'Knowledge Base', Icon: BookOpen },
+            ].map(({ key, label, Icon }) => (
+              <button key={key} onClick={() => setAdminTab(key)} style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '7px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '500',
+                backgroundColor: adminTab === key ? '#2563eb' : '#f3f4f6',
+                color: adminTab === key ? '#fff' : '#374151',
+              }}>
+                <Icon size={13} /> {label}
+              </button>
+            ))}
+          </div>
+
+          {adminLoading && <p style={{ color: '#6b7280', fontSize: '13px' }}>Loading...</p>}
+          {adminError  && <p style={{ color: '#dc2626', backgroundColor: '#fef2f2', padding: '8px', borderRadius: '6px', fontSize: '13px' }}>{adminError}</p>}
+
+          {/* ── Users Tab ──────────────────────────────────────────────────── */}
+          {adminTab === 'users' && !adminLoading && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6', textAlign: 'left' }}>
+                    {['Email', 'Active', 'Role', 'Messages'].map(h => (
+                      <th key={h} style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminUsers.map(u => (
+                    <tr key={u.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>{u.email}</td>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>{u.is_active ? 'Yes' : 'No'}</td>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>
+                        {u.is_superuser
+                          ? <span style={{ color: '#b45309', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><ShieldCheck size={12} /> Admin</span>
+                          : <span style={{ color: '#6b7280' }}>User</span>}
+                      </td>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>{u.message_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {adminUsers.length === 0 && <p style={{ color: '#9ca3af', fontSize: '13px', marginTop: '8px' }}>No users found.</p>}
+            </div>
+          )}
+
+          {/* ── Chats Tab ──────────────────────────────────────────────────── */}
+          {adminTab === 'chats' && !adminLoading && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6', textAlign: 'left' }}>
+                    {['User', 'Role', 'Message', 'Date'].map(h => (
+                      <th key={h} style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminChats.map(c => (
+                    <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', fontSize: '12px' }}>{c.user_email}</td>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>
+                        <span style={{ color: c.role === 'user' ? '#2563eb' : '#16a34a', fontWeight: '500' }}>{c.role}</span>
+                      </td>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={c.content}>{c.content}</td>
+                      <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: '11px' }}>
+                        {new Date(c.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {adminChats.length === 0 && <p style={{ color: '#9ca3af', fontSize: '13px', marginTop: '8px' }}>No messages yet.</p>}
+            </div>
+          )}
+
+          {/* ── Knowledge Base Tab ─────────────────────────────────────────── */}
+          {adminTab === 'knowledge' && !adminLoading && (
+            <div>
+              {/* Feedback */}
+              {kbMsg && (
+                <p style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '6px', fontSize: '13px',
+                  color: kbMsg.type === 'success' ? 'green' : 'red',
+                  backgroundColor: kbMsg.type === 'success' ? '#eaffea' : '#ffeaea' }}>
+                  {kbMsg.text}
                 </p>
               )}
+
+              {/* Add text chunks */}
+              <div style={{ marginBottom: '14px', padding: '12px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '8px' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#3730a3' }}>Add Text Chunks</h4>
+                <form onSubmit={handleKbTextIngest}>
+                  <textarea style={styles.textarea} value={kbText} onChange={e => setKbText(e.target.value)}
+                    placeholder="Paste text. Separate chunks with a blank line." />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button type="submit" disabled={!kbText.trim()}
+                      style={{ ...styles.btn, backgroundColor: '#4f46e5', fontSize: '13px', padding: '7px 16px', opacity: !kbText.trim() ? 0.5 : 1 }}>
+                      Save Chunks
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* File upload */}
+              <div style={{ marginBottom: '14px', padding: '12px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#166534', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Upload size={13} /> Upload .txt or .pdf
+                </h4>
+                <input type="file" accept=".txt,.pdf" onChange={handleKbFileUpload} disabled={kbFileLoading} style={{ fontSize: '13px' }} />
+                {kbFileLoading && <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Uploading and embedding...</p>}
+              </div>
+
+              {/* KB entries list */}
+              <div>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                  {adminKnowledge.length} entr{adminKnowledge.length === 1 ? 'y' : 'ies'} in knowledge base
+                </p>
+                {adminKnowledge.map(kb => (
+                  <div key={kb.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                    padding: '8px 10px', marginBottom: '6px', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: '#fff' }}>
+                    <p style={{ fontSize: '12px', color: '#374151', margin: 0, flex: 1, marginRight: '10px' }}>{kb.content_preview}</p>
+                    <button onClick={() => deleteKnowledgeEntry(kb.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', flexShrink: 0, padding: '2px' }}
+                      title="Delete entry">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+                {adminKnowledge.length === 0 && <p style={{ color: '#9ca3af', fontSize: '13px' }}>No knowledge base entries yet.</p>}
+              </div>
             </div>
           )}
         </div>

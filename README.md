@@ -8,13 +8,15 @@ A full-stack AI-powered chatbot assistant specialized for the **Saudi Arabian Te
 
 ## Features
 
-- **AI Chat** — Powered by Gemini 2.5 Flash with expert system instructions for KSA tender market
-- **RAG Knowledge Base** — Add tender laws, procedures, and regulations; the bot retrieves relevant context before every answer
+- **AI Chat** — Powered by Gemini 2.5 Flash with expert system instructions for the KSA tender market
+- **RAG Knowledge Base** — Admins add tender laws, procedures, and regulations; the bot retrieves relevant context before every answer
 - **Persistent Chat History** — Every conversation is saved per user and reloaded on login
 - **JWT Authentication** — Secure register/login with token-based auth via FastAPI Users
 - **Vector Search** — pgvector + Gemini embeddings (768-dim) for semantic similarity search
+- **Admin Panel** — Superuser dashboard to manage users, view all chats, and control the knowledge base
+- **Knowledge Base Management** — Admins can add text chunks, upload `.txt`/`.pdf` files, and delete entries
 - **Database Migrations** — Alembic manages all schema changes automatically on startup
-- **Unit Tests** — 5 pytest tests covering auth and all API endpoints
+- **Unit Tests** — 12 pytest tests covering auth, all API endpoints, and all admin endpoints
 - **Fully Dockerized** — One command to run everything: DB, backend, frontend
 
 ---
@@ -31,6 +33,7 @@ A full-stack AI-powered chatbot assistant specialized for the **Saudi Arabian Te
 | **ORM** | SQLAlchemy (async) |
 | **Migrations** | Alembic |
 | **Auth** | FastAPI Users + JWT (Bearer Token) |
+| **PDF Parsing** | PyMuPDF (fitz) |
 | **Testing** | pytest, pytest-asyncio, httpx, aiosqlite |
 | **Containers** | Docker, Docker Compose |
 
@@ -45,19 +48,20 @@ tander-bot/
 ├── bot/                        # FastAPI Backend
 │   ├── app/
 │   │   ├── api/v1/
-│   │   │   └── chat.py         # Chat, history, and ingest endpoints
+│   │   │   ├── chat.py         # Chat, history endpoints (ingest: admin only)
+│   │   │   └── admin.py        # Admin-only endpoints (users, chats, knowledge base)
 │   │   ├── core/
-│   │   │   ├── auth.py         # JWT strategy and FastAPI Users setup
+│   │   │   ├── auth.py         # JWT strategy, current_active_user, current_superuser
 │   │   │   ├── config.py       # Pydantic settings from .env
 │   │   │   └── db.py           # Async engine and session factory
 │   │   ├── models/
 │   │   │   └── models.py       # User, ChatMessage, KnowledgeBase tables
 │   │   ├── providers/
 │   │   │   ├── base.py         # Abstract AI provider interface
-│   │   │   ├── factory.py      # Provider factory (swap AI models easily)
 │   │   │   └── gemini.py       # Gemini client (singleton)
 │   │   ├── schemas/
-│   │   │   ├── chat.py         # Request/Response schemas
+│   │   │   ├── admin.py        # Admin request/response schemas
+│   │   │   ├── chat.py         # Chat request/response schemas
 │   │   │   └── user.py         # User schemas
 │   │   ├── services/
 │   │   │   ├── chat_service.py # Core chat logic + history
@@ -66,20 +70,19 @@ tander-bot/
 │   ├── alembic/                # Database migrations
 │   │   ├── versions/
 │   │   │   └── 20250228_0001_initial_schema.py
-│   │   ├── env.py
-│   │   └── script.py.mako
+│   │   └── env.py
 │   ├── tests/
-│   │   ├── conftest.py         # Shared fixtures (in-memory DB, mocked AI)
+│   │   ├── conftest.py         # Shared fixtures (in-memory DB, mocked AI, superuser)
 │   │   ├── test_auth.py        # Register and login tests
-│   │   └── test_api.py         # History, message, and ingest tests
-│   ├── alembic.ini
+│   │   ├── test_api.py         # History, message, and ingest tests
+│   │   └── test_admin.py       # All admin endpoint tests
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── example.env
 │
 └── bot-ui/                     # React Frontend
     ├── src/
-    │   └── App.jsx             # Full chat UI with knowledge base panel
+    │   └── App.jsx             # Full chat UI + admin panel (single file)
     └── Dockerfile
 ```
 
@@ -89,10 +92,11 @@ tander-bot/
 
 ### Authentication
 
-| Method | Endpoint | Description | Auth Required |
+| Method | Endpoint | Description | Auth |
 |---|---|---|---|
 | `POST` | `/auth/register` | Register a new user | No |
 | `POST` | `/auth/jwt/login` | Login and receive JWT token | No |
+| `GET` | `/users/me` | Get current user profile + superuser status | Yes |
 
 **Register body:**
 ```json
@@ -117,13 +121,12 @@ username=user@example.com&password=YourPassword123!
 
 ---
 
-### Chat
+### Chat (Regular Users)
 
-| Method | Endpoint | Description | Auth Required |
+| Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| `GET` | `/api/v1/history` | Get full chat history for logged-in user | Yes |
-| `POST` | `/api/v1/message` | Send a message and get an AI reply | Yes |
-| `POST` | `/api/v1/ingest` | Add text chunks to the knowledge base | Yes |
+| `GET` | `/api/v1/history` | Get full chat history for logged-in user | User |
+| `POST` | `/api/v1/message` | Send a message and get an AI reply with sources | User |
 
 **POST /api/v1/message — Request:**
 ```json
@@ -143,22 +146,28 @@ username=user@example.com&password=YourPassword123!
 }
 ```
 
+---
+
+### Admin Endpoints (Superuser Only)
+
+All admin endpoints require a superuser JWT token. Regular users receive `403 Forbidden`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/admin/users` | List all users with message counts |
+| `GET` | `/api/v1/admin/chats` | List all chat messages across all users |
+| `GET` | `/api/v1/admin/knowledge` | List all knowledge base entries (200-char preview) |
+| `POST` | `/api/v1/admin/knowledge/upload` | Upload a `.txt` or `.pdf` file to the knowledge base |
+| `DELETE` | `/api/v1/admin/knowledge/{id}` | Delete a knowledge base entry by ID |
+| `POST` | `/api/v1/ingest` | Add text chunks directly to the knowledge base |
+
 **POST /api/v1/ingest — Request:**
 ```json
 {
   "texts": [
     "Etimad platform requires CR registration before bidding.",
-    "Bid security must be between 1% and 2% of the total tender value.",
-    "LCGPA requires a minimum 30% Saudi workforce for compliance."
+    "Bid security must be between 1% and 2% of the total tender value."
   ]
-}
-```
-
-**POST /api/v1/ingest — Response:**
-```json
-{
-  "inserted": 3,
-  "message": "Successfully inserted 3 of 3 chunk(s) into the knowledge base."
 }
 ```
 
@@ -193,13 +202,11 @@ cd tander-bot
 
 ### Step 2 — Create the environment file
 
-Create a `.env` file inside the `bot/` folder:
-
 ```bash
 cp bot/example.env bot/.env
 ```
 
-Then open `bot/.env` and fill in your values:
+Edit `bot/.env` and fill in your values:
 
 ```env
 GEMINI_API_KEY="your-gemini-api-key-here"
@@ -235,46 +242,63 @@ This single command will:
 |---|---|
 | **Chat UI** | http://localhost:3000 |
 | **API Docs (Swagger)** | http://localhost:8000/docs |
-| **API Root / Health** | http://localhost:8000 |
+| **API Health Check** | http://localhost:8000 |
 
 ---
 
-### Step 5 — Add your first knowledge base entries
+## Admin Setup
 
-Once logged in, click the **`+ Knowledge Base`** button in the top-right corner of the chat UI.
+### Creating an Admin Account
 
-Paste your tender knowledge — separate each entry with a **blank line**:
+The `/auth/register` endpoint always creates regular users. To promote a user to admin:
 
-```
-Etimad platform requires CR registration before submitting any bid.
+**1. Register normally** via the UI at `http://localhost:3000`
 
-Bid security must be between 1% and 2% of the total tender value.
+**2. Promote to superuser** via the database:
 
-LCGPA requires a minimum 30% Saudi workforce for compliance with local content rules.
-
-Technical proposals must be submitted separately from financial proposals on Etimad.
+```bash
+docker exec -it tender_db psql -U myuser -d bot_db
 ```
 
-Click **Save to Knowledge Base**. The bot will now use these as sources when answering related questions.
+```sql
+UPDATE "user" SET is_superuser = true WHERE email = 'your@email.com';
+\q
+```
+
+Or in a single command:
+
+```bash
+docker exec -it tender_db psql -U myuser -d bot_db -c "UPDATE \"user\" SET is_superuser = true WHERE email = 'your@email.com';"
+```
+
+**3. Log in** — the **Admin Panel** button (🛡) will appear in the top-right of the chat UI.
+
+---
+
+### Admin Panel Features
+
+| Tab | Capabilities |
+|---|---|
+| **Users** | View all registered users, active status, role, message count |
+| **Chats** | Monitor all conversations across all users (newest first) |
+| **Knowledge Base** | Add text chunks, upload `.txt`/`.pdf` files, view and delete entries |
 
 ---
 
 ## Running Tests
 
-Tests run inside the Docker container using an **in-memory SQLite database** — no real Postgres or Gemini API calls are made.
+Tests use an **in-memory SQLite database** — no real Postgres or Gemini API calls are made.
 
-### Option 1 — From your terminal (Docker must be running)
+### From your Mac terminal (Docker must be running)
 
 ```bash
 docker exec tender_backend pytest --tb=short -v
 ```
 
-### Option 2 — From Docker Desktop UI
+### From Docker Desktop UI
 
-1. Open **Docker Desktop**
-2. Click on the **`tender_backend`** container
-3. Click the **`>_ Exec`** tab
-4. Type: `pytest --tb=short -v`
+1. Open **Docker Desktop** → click `tender_backend` container → **Exec** tab
+2. Type: `pytest --tb=short -v`
 
 ### Run specific test files
 
@@ -282,22 +306,32 @@ docker exec tender_backend pytest --tb=short -v
 # Auth tests only
 docker exec tender_backend pytest tests/test_auth.py -v
 
-# API tests only
+# API (chat) tests only
 docker exec tender_backend pytest tests/test_api.py -v
+
+# Admin endpoint tests only
+docker exec tender_backend pytest tests/test_admin.py -v
 ```
 
 ### Expected output
 
 ```
-collected 5 items
+collected 12 items
 
-tests/test_api.py::test_get_history_empty_for_new_user PASSED   [ 20%]
-tests/test_api.py::test_send_message_returns_reply PASSED        [ 40%]
-tests/test_api.py::test_ingest_documents PASSED                  [ 60%]
-tests/test_auth.py::test_register_success PASSED                 [ 80%]
-tests/test_auth.py::test_login_success PASSED                    [100%]
+tests/test_admin.py::test_admin_requires_superuser         PASSED  [  8%]
+tests/test_admin.py::test_admin_list_users                 PASSED  [ 16%]
+tests/test_admin.py::test_admin_list_chats                 PASSED  [ 25%]
+tests/test_admin.py::test_admin_list_knowledge             PASSED  [ 33%]
+tests/test_admin.py::test_admin_upload_txt_file            PASSED  [ 41%]
+tests/test_admin.py::test_admin_delete_knowledge_entry     PASSED  [ 50%]
+tests/test_api.py::test_get_history_empty_for_new_user     PASSED  [ 58%]
+tests/test_api.py::test_send_message_returns_reply         PASSED  [ 66%]
+tests/test_api.py::test_ingest_requires_superuser          PASSED  [ 75%]
+tests/test_api.py::test_ingest_documents                   PASSED  [ 83%]
+tests/test_auth.py::test_register_success                  PASSED  [ 91%]
+tests/test_auth.py::test_login_success                     PASSED  [100%]
 
-5 passed in 1.10s
+12 passed in 1.34s
 ```
 
 ---
@@ -328,13 +362,43 @@ Return reply + sources to the frontend
 
 ---
 
+## Database Access (pgAdmin / psql)
+
+### Connect with pgAdmin 4
+
+| Field | Value |
+|---|---|
+| Host | `127.0.0.1` |
+| Port | `5432` |
+| Database | `bot_db` |
+| Username | `myuser` |
+| Password | `mypassword` |
+
+> Use `127.0.0.1` not `localhost` to ensure pgAdmin connects to the Docker container, not your local Postgres.
+
+### Direct psql access
+
+```bash
+docker exec -it tender_db psql -U myuser -d bot_db
+```
+
+### Key tables
+
+| Table | Contents |
+|---|---|
+| `user` | Registered accounts — set `is_superuser = true` to promote admins |
+| `chat_messages` | All conversation history per user |
+| `knowledge_base` | RAG text chunks with 768-dim vector embeddings |
+
+---
+
 ## Stopping the Project
 
 ```bash
-# Stop all containers
+# Stop all containers (data preserved)
 docker compose down
 
-# Stop and delete all data (including the database volume)
+# Stop and delete all data including the database volume
 docker compose down -v
 ```
 
@@ -344,25 +408,29 @@ docker compose down -v
 
 **Port 8000 or 3000 already in use**
 ```bash
-# Find what's using the port
-lsof -i :8000
-# Kill it
+lsof -i :8000   # find what's using the port
 kill -9 <PID>
 ```
 
 **Backend keeps restarting**
 ```bash
-# Check backend logs
 docker logs tender_backend
 ```
 
-**"alembic_version" table issues after schema changes**
+**Alembic migration issues**
 ```bash
-# Check current migration version in DB
+# Check current migration version
 docker exec tender_backend alembic current
 
-# Apply any pending migrations
+# Apply pending migrations
 docker exec tender_backend alembic upgrade head
+```
+
+**pgAdmin connecting to wrong database**
+
+Use `127.0.0.1` as the host (not `localhost`) and make sure no local Postgres is running on port 5432:
+```bash
+brew services stop postgresql   # macOS
 ```
 
 ---

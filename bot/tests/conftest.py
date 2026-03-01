@@ -103,3 +103,43 @@ async def auth_token(client: AsyncClient, registered_user: dict):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     return res.json()["access_token"]
+
+
+@pytest_asyncio.fixture()
+async def registered_superuser(client: AsyncClient, db_session):
+    """Creates a superuser directly in DB (register endpoint always creates regular users)."""
+    import uuid
+    from sqlalchemy import select
+    from app.models.models import User
+    from fastapi_users.password import PasswordHelper
+
+    email = "admin@test.com"
+    # Avoid UNIQUE violation if the in-memory DB already has this user from a previous test
+    existing = (await db_session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    if existing is None:
+        helper = PasswordHelper()
+        user = User(
+            id=uuid.uuid4(),
+            email=email,
+            hashed_password=helper.hash("AdminPass123!"),
+            is_active=True,
+            is_superuser=True,
+            is_verified=True,
+        )
+        db_session.add(user)
+        await db_session.commit()
+    return {"email": email, "password": "AdminPass123!"}
+
+
+@pytest_asyncio.fixture()
+async def superuser_token(client: AsyncClient, registered_superuser: dict):
+    """Logs in the superuser and returns the Bearer token."""
+    res = await client.post(
+        "/auth/jwt/login",
+        data={
+            "username": registered_superuser["email"],
+            "password": registered_superuser["password"],
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    return res.json()["access_token"]

@@ -5,7 +5,7 @@ from app.schemas.chat import ChatRequest, ChatResponse, IngestRequest, IngestRes
 from app.services.chat_service import ChatService
 from app.services.rag_service import RAGService
 from app.core.db import get_async_session
-from app.core.auth import current_active_user
+from app.core.auth import current_active_user, current_superuser
 from app.models.models import User
 
 chat_router = APIRouter()
@@ -48,12 +48,12 @@ async def send_message(
 async def ingest_documents(
     request: IngestRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    _: User = Depends(current_superuser)
 ):
     """
     Ingests one or more text chunks into the knowledge base.
     Each chunk is embedded via Gemini and stored in the vector DB.
-    Requires a valid JWT token (any logged-in user can ingest).
+    Requires superuser (admin) privileges.
     """
     try:
         rag = RAGService()

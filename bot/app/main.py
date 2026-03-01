@@ -6,7 +6,8 @@ from sqlalchemy import text
 from app.core.db import engine
 from app.core.auth import fastapi_users, auth_backend
 from app.api.v1.chat import chat_router
-from app.schemas.user import UserRead, UserCreate
+from app.api.v1.admin import admin_router
+from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.core.config import settings
 
 @asynccontextmanager
@@ -50,11 +51,25 @@ app.include_router(
     tags=["auth"]
 )
 
+# User profile route — exposes GET /users/me so the frontend can check is_superuser
+app.include_router(
+    fastapi_users.get_users_router(UserRead, UserUpdate),
+    prefix="/users",
+    tags=["users"],
+)
+
 # Chat Routes (Message & History)
 app.include_router(
-    chat_router, 
-    prefix="/api/v1", 
-    tags=["chat"]
+    chat_router,
+    prefix="/api/v1",
+    tags=["chat"],
+)
+
+# Admin Routes
+app.include_router(
+    admin_router,
+    prefix="/api/v1/admin",
+    tags=["admin"],
 )
 
 @app.get("/", tags=["system"])

@@ -9,6 +9,7 @@ asyncpg
 pgvector
 sqlalchemy[ext]
 alembic
+pymupdf
 # Testing
 pytest
 pytest-asyncio

@@ -53,12 +53,30 @@ async def test_send_message_returns_reply(client: AsyncClient, auth_token: str):
 
 
 # ─────────────────────────────────────────────
-# TEST 5: POST /api/v1/ingest — stores chunks in the knowledge base
+# TEST 5a: POST /api/v1/ingest — regular user is FORBIDDEN (403)
 # ─────────────────────────────────────────────
 @pytest.mark.asyncio
-async def test_ingest_documents(client: AsyncClient, auth_token: str):
+async def test_ingest_requires_superuser(client: AsyncClient, auth_token: str):
     """
-    GIVEN a logged-in user
+    GIVEN a regular (non-superuser) logged-in user
+    WHEN  POST /api/v1/ingest is called
+    THEN  the response is 403 Forbidden (ingest is now admin-only)
+    """
+    res = await client.post(
+        "/api/v1/ingest",
+        json={"texts": ["Some knowledge text."]},
+        headers={"Authorization": f"Bearer {auth_token}"}
+    )
+    assert res.status_code == 403, f"Expected 403, got {res.status_code}: {res.text}"
+
+
+# ─────────────────────────────────────────────
+# TEST 5b: POST /api/v1/ingest — superuser can ingest chunks
+# ─────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_ingest_documents(client: AsyncClient, superuser_token: str):
+    """
+    GIVEN a superuser (admin)
     WHEN  POST /api/v1/ingest is called with a list of text chunks
     THEN  the response is 200, 'inserted' count matches the number of chunks sent,
           and the success message is returned
@@ -71,7 +89,7 @@ async def test_ingest_documents(client: AsyncClient, auth_token: str):
     res = await client.post(
         "/api/v1/ingest",
         json={"texts": chunks},
-        headers={"Authorization": f"Bearer {auth_token}"}
+        headers={"Authorization": f"Bearer {superuser_token}"}
     )
 
     assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.text}"
