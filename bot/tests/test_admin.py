@@ -141,9 +141,10 @@ async def test_admin_delete_knowledge_entry(client: AsyncClient, superuser_token
     from sqlalchemy import text
 
     # Insert directly via raw SQL — SQLite test DB requires a non-NULL embedding;
-    # we use a zeroed 768-float blob to satisfy the NOT NULL constraint without pgvector.
+    # we use a zeroed float blob to satisfy the NOT NULL constraint without pgvector.
+    from app.core.config import settings
     entry_id = uuid.uuid4()
-    dummy_embedding = "[" + ",".join(["0.0"] * 768) + "]"
+    dummy_embedding = "[" + ",".join(["0.0"] * settings.gemini_embedding_size) + "]"
     await db_session.execute(
         text("INSERT INTO knowledge_base (id, content, embedding) VALUES (:id, :content, :emb)"),
         {"id": entry_id.hex, "content": "Test knowledge entry for deletion.", "emb": dummy_embedding},

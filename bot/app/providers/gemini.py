@@ -37,7 +37,7 @@ class GeminiProvider(BaseAIProvider):
         """
         Internal initialization method for the singleton instance.
         """
-        self.model_id = "gemini-2.5-flash"
+        self.model_id = settings.gemini_ai_model
         # We fetch the singleton client from the manager
         self.client = None
         

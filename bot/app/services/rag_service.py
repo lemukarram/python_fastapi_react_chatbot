@@ -28,9 +28,9 @@ class RAGService:
             
             # New method for generating embeddings
             result = self.client.models.embed_content(
-                model="gemini-embedding-001",
+                model=settings.gemini_embedding_model,
                 contents=text_to_embed,
-                config=types.EmbedContentConfig(output_dimensionality=768)
+                config=types.EmbedContentConfig(output_dimensionality=settings.gemini_embedding_size)
             )
             
             if result and result.embeddings:

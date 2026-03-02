@@ -4,6 +4,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
+from app.core.config import settings
 
 # This is the base class that all our tables will inherit from
 class Base(DeclarativeBase):
@@ -42,6 +43,6 @@ class KnowledgeBase(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     content: Mapped[str] = mapped_column(Text)
     
-    # Gemini embeddings are 768 dimensions. 
+    # Embedding dimensions are configured via GEMINI_EMBEDDING_SIZE in .env
     # This column allows Postgres to do high-speed AI searching.
-    embedding: Mapped[Vector] = mapped_column(Vector(768))
+    embedding: Mapped[Vector] = mapped_column(Vector(settings.gemini_embedding_size))
