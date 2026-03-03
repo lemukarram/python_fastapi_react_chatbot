@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, Users, MessageSquare, BookOpen, Upload, Trash2, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Users, MessageSquare, BookOpen, Upload, Trash2, ArrowLeft, Mic, MicOff } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -21,6 +21,14 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // ── Voice state ─────────────────────────────────────────────────────────────
+  const [voiceSupported, setVoiceSupported] = useState(false); // hides UI on unsupported browsers
+  const [isListening,    setIsListening]    = useState(false); // mic is capturing
+  const [isSpeaking,     setIsSpeaking]     = useState(false); // TTS is playing
+  const [isMuted,        setIsMuted]        = useState(false); // user silenced TTS
+  const [voiceMode,      setVoiceMode]      = useState(false); // continuous conversation loop
+  const [voiceLang,      setVoiceLang]      = useState('ar-SA'); // STT + TTS language
+
   // ── Admin panel state ───────────────────────────────────────────────────────
   const [adminTab, setAdminTab] = useState('users');
   const [adminUsers, setAdminUsers] = useState([]);
@@ -32,7 +40,10 @@ export default function App() {
   const [kbFileLoading, setKbFileLoading] = useState(false);
   const [kbMsg, setKbMsg] = useState(null);
 
-  const chatBoxRef = useRef(null);
+  const chatBoxRef     = useRef(null);
+  const recognitionRef = useRef(null);                   // SpeechRecognition instance (lazy-init)
+  const synthRef       = useRef(window.speechSynthesis); // shorthand alias for Web Speech Synthesis
+  const autoRestartRef = useRef(false);                  // ref (not state) — survives stale closures in TTS callbacks
 
   useEffect(() => {
     if (token && view === 'chat') fetchHistory();
@@ -43,6 +54,13 @@ export default function App() {
       chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Detect Web Speech API support once on mount — hides mic button on unsupported browsers (e.g. Firefox)
+  useEffect(() => {
+    if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+      setVoiceSupported(true);
+    }
+  }, []);
 
   // ── Auth handlers ───────────────────────────────────────────────────────────
   const fetchHistory = async () => {
@@ -138,6 +156,136 @@ export default function App() {
     } finally { setLoading(false); }
   };
 
+  // ── Voice handlers ──────────────────────────────────────────────────────────
+
+  // STT: lazy SpeechRecognition init — called on first mic click (not in useEffect)
+  // so it fires after a user gesture, which is required by browsers for mic access.
+  const initRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return null;
+    const rec = new SpeechRecognition();
+    rec.lang            = voiceLang; // configurable via language selector in the UI
+    rec.interimResults  = false;   // only fire onresult with final transcript
+    rec.maxAlternatives = 1;
+    rec.continuous      = false;   // stop automatically after one utterance (most reliable cross-browser)
+
+    rec.onstart = () => {
+      setIsListening(true);
+      synthRef.current.cancel(); // stop any TTS when mic activates
+      setIsSpeaking(false);
+    };
+
+    rec.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        setInput(transcript);         // show transcript in the text input box
+        sendVoiceMessage(transcript); // auto-submit to the chat API
+      }
+    };
+
+    rec.onerror = (event) => {
+      setIsListening(false);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setVoiceSupported(false); // mic permission denied — hide voice UI permanently
+      }
+      if (event.error === 'no-speech' && autoRestartRef.current) {
+        setTimeout(() => startListening(), 300); // user was silent — retry if in voice mode
+      }
+    };
+
+    rec.onend = () => { setIsListening(false); };
+    return rec;
+  };
+
+  const startListening = () => {
+    synthRef.current.cancel();
+    setIsSpeaking(false);
+    if (!recognitionRef.current) recognitionRef.current = initRecognition();
+    if (!recognitionRef.current) return;
+    try { recognitionRef.current.start(); } catch (err) { /* InvalidStateError: already started — ignore */ }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch (err) { /* ignore */ }
+    setIsListening(false);
+  };
+
+  // Voice: send a transcript directly without a form event
+  // NOTE: mirrors sendMessage network logic — if sendMessage is refactored (e.g. for streaming),
+  // update this function in parallel.
+  const sendVoiceMessage = async (transcript) => {
+    if (!transcript.trim()) return;
+    const captured = transcript; // capture value before any state updates clear it
+    setMessages(prev => [...prev, { role: 'user', content: captured }]);
+    setInput('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: captured }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessages(prev => [...prev, { role: 'bot', content: data.reply, sources: data.sources || [] }]);
+        speakText(data.reply);
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: 'bot', content: 'Error connecting to server.' }]);
+    } finally { setLoading(false); }
+  };
+
+  // TTS: speak the bot reply aloud using the browser's Web Speech Synthesis API
+  const speakText = (text) => {
+    if (isMuted) {
+      if (autoRestartRef.current) startListening(); // muted but voice mode on — keep the loop alive
+      return;
+    }
+    synthRef.current.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang   = voiceLang;
+    utterance.rate   = 0.95; // slightly slower than default for clarity
+    utterance.pitch  = 1;
+    utterance.volume = 1;
+
+    // Prefer a voice matching the selected language; fall back to browser default
+    const voices    = synthRef.current.getVoices();
+    const langCode  = voiceLang.split('-')[0]; // e.g. 'ar' from 'ar-SA'
+    const bestVoice = voices.find(v => v.lang === voiceLang) || voices.find(v => v.lang.startsWith(langCode));
+    if (bestVoice) utterance.voice = bestVoice;
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend   = () => {
+      setIsSpeaking(false);
+      // autoRestartRef (not state) is used here because utterance callbacks capture stale state values
+      if (autoRestartRef.current) setTimeout(() => startListening(), 400); // 400ms gap prevents mic picking up TTS tail
+    };
+    utterance.onerror = (ev) => {
+      if (ev.error !== 'interrupted') console.warn('TTS error:', ev.error); // 'interrupted' fires on cancel() — not a real error
+      setIsSpeaking(false);
+    };
+    synthRef.current.speak(utterance);
+  };
+
+  const cancelSpeech = () => { synthRef.current.cancel(); setIsSpeaking(false); };
+
+  const toggleMute = () => {
+    if (!isMuted && isSpeaking) cancelSpeech();
+    setIsMuted(prev => !prev);
+  };
+
+  const handleLangChange = (e) => {
+    setVoiceLang(e.target.value);
+    recognitionRef.current = null; // force re-init with new language on next mic click
+  };
+
+  const toggleVoiceMode = () => {
+    const next = !voiceMode;
+    setVoiceMode(next);
+    autoRestartRef.current = next; // keep ref in sync so TTS onend callback sees the current value
+    if (!next) { stopListening(); cancelSpeech(); }
+  };
+
   // ── Admin handlers ──────────────────────────────────────────────────────────
   const authHeader = { Authorization: `Bearer ${token}` };
 
@@ -213,6 +361,17 @@ export default function App() {
     btn: { padding: '10px 20px', borderRadius: '6px', backgroundColor: '#007bff', color: 'white', border: 'none', cursor: 'pointer' },
     toggleLink: { color: '#007bff', cursor: 'pointer', textDecoration: 'underline', marginTop: '15px', display: 'block', fontSize: '14px' },
     textarea: { width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '13px', resize: 'vertical', minHeight: '110px' },
+    micBtn: {
+      width: '42px', height: '42px', borderRadius: '50%', border: 'none',
+      cursor: 'pointer', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', flexShrink: 0, transition: 'background-color 0.2s, box-shadow 0.2s',
+    },
+    micBtnIdle:      { backgroundColor: '#e5e7eb', color: '#374151' },
+    micBtnListening: { backgroundColor: '#ef4444', color: '#ffffff' },
+    muteBtn: {
+      padding: '4px 10px', borderRadius: '12px', border: '1px solid #d1d5db',
+      fontSize: '11px', cursor: 'pointer', backgroundColor: 'transparent', color: '#6b7280',
+    },
   };
 
   return (
@@ -286,10 +445,55 @@ export default function App() {
             {loading && <div style={styles.bot}>Typing...</div>}
           </div>
 
-          <form onSubmit={sendMessage} style={{ display: 'flex', gap: '5px' }}>
-            <input style={{ ...styles.input, flexGrow: 1 }} value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message..." />
-            <button type="submit" style={styles.btn}>Send</button>
-          </form>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {/* Row 1: text input + Send button + mic button */}
+            <form onSubmit={sendMessage} style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <input
+                style={{ ...styles.input, flexGrow: 1 }}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                placeholder={isListening ? 'Listening...' : 'Type a message...'}
+              />
+              <button type="submit" style={styles.btn} disabled={loading}>Send</button>
+              {voiceSupported && (
+                <button
+                  type="button"
+                  title={isListening ? 'Stop listening' : 'Start voice input'}
+                  onClick={isListening ? stopListening : startListening}
+                  style={{ ...styles.micBtn, ...(isListening ? styles.micBtnListening : styles.micBtnIdle) }}
+                  className={`mic-btn${isListening ? ' mic-pulsing' : ''}`}
+                >
+                  {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                </button>
+              )}
+            </form>
+
+            {/* Row 2: voice controls bar — only rendered if browser supports Web Speech API */}
+            {voiceSupported && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '12px', color: '#6b7280', flexWrap: 'wrap' }}>
+                {/* Language selector */}
+                <select
+                  value={voiceLang}
+                  onChange={handleLangChange}
+                  style={{ fontSize: '12px', padding: '3px 6px', borderRadius: '6px', border: '1px solid #d1d5db', color: '#374151', cursor: 'pointer', backgroundColor: '#fff' }}
+                >
+                  <option value="ar-SA">🇸🇦 Arabic (SA)</option>
+                  <option value="en-US">🇺🇸 English (US)</option>
+                  <option value="en-GB">🇬🇧 English (UK)</option>
+                </select>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={voiceMode} onChange={toggleVoiceMode} style={{ cursor: 'pointer' }} />
+                  Auto-listen after reply
+                </label>
+                <button type="button" onClick={toggleMute} style={styles.muteBtn}>
+                  {isMuted ? '🔇 Unmute' : '🔊 Mute voice'}
+                </button>
+                {isListening && <span style={{ color: '#ef4444', fontWeight: '500' }}>● Listening...</span>}
+                {isSpeaking && !isMuted && <span style={{ color: '#2563eb', fontWeight: '500' }}>● Speaking...</span>}
+              </div>
+            )}
+          </div>
 
         </div>
       )}
